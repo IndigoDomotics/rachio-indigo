@@ -43,7 +43,7 @@ The plugin supports a couple of custom actions:
 
 Rachio Indigo devices have a lot of custom states. Some describe attributes of the controller device itself, most of which are dedicated to current weather conditions and forecast data. We'll define the device information states first, then the forecast data states.
 
-##### Device Information
+#### Device Information
 
 | State                | Type    | Description                                                                                                                                                                                                                  |
 |:---------------------|:--------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -62,7 +62,7 @@ Rachio Indigo devices have a lot of custom states. Some describe attributes of t
 | timeZone             | String  | Name of the time zone that the controller is in.                                                                                                                                                                             |
 | utcOffset            | Integer | Offset between the time zone and GMT.                                                                                                                                                                                        |
 
-##### Current Weather
+#### Current Weather
 
 These states represent the current weather conditions. Any totals are for the day. Measurements are in units specified in the device config (see above).
 
@@ -80,7 +80,7 @@ These states represent the current weather conditions. Any totals are for the da
 | current_weatherType        | String  | An enumeration describing the overall conditions (see [Weather Type Enumeration](#weather-type-enumeration) below for details) |
 | current_windSpeed          | Float   | Wind speed                                                                                              |
 
-##### Weather Forecast
+#### Weather Forecast
 
 Forecast data is available for 14 days including the current day. In the list below, substitute the value of the **_#_** in the state names for the day. 0=Today, 1=Tomorrow, all the way to 13, which is today + 13 days on the calendar.
 
@@ -99,7 +99,7 @@ Forecast data is available for 14 days including the current day. In the list be
 | t#forecast_weatherType       | String  | An enumeration describing the overall conditions (see [Weather Type Enumeration](#weather-type-enumeration) below for details) |
 | t#forecast_windSpeed         | Float   | Wind speed                                                                                                                     |
 
-##### Weather Type Enumeration
+#### Weather Type Enumeration
 
 | Value               | Meaning                      |
 |:--------------------|:-----------------------------|
@@ -121,4 +121,4 @@ Debugging information is written to the plugin's log file, located here:
 
 `/Library/Application Support/Perceptive Automation/Indigo 7/Logs/opensource.rachio/plugin.log`
 
-Feel free to dig through there to see if there's anything helpful. Post questions on the Rachio plugin topic on our forums.
+Feel free to dig through there to see if there's anything helpful. Post questions on [the Rachio plugin topic on our forums](http://forums.indigodomo.com/viewtopic.php?f=65&t=18321).
