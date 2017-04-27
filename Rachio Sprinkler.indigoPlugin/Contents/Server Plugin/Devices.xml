@@ -1,0 +1,1234 @@
+<?xml version="1.0"?>
+<!-- If your plugin defines device types, you can define them here.-->
+
+<Devices>
+    <!-- This device illustrates how a plugin can inherit Indigo's sprinkler
+    device behavior including active zone states, and sprinkler actions, and
+    will support Indigo and Indigo Touch's native UI for sprinkler type devices.
+    -->
+    <Device type="sprinkler" id="sprinkler">
+        <Name>Rachio Sprinkler Controller</Name>
+        <ConfigUI>
+            <!-- The ConfigUI here is just an example of the type of device
+            specific UI that might be needed. Here you might specify a text
+            field for an IP address, a serial port popup, or other device
+            specific options.
+            -->
+            <Field type="menu" id="id">
+                <Label>Device:</Label>
+                <List class="self" method="availableControllers"/>
+            </Field>
+            <Field type="menu" id="units" defaultValue="US">
+                <Label>Weather units in:</Label>
+                <List>
+                    <Option value="US">US</Option>
+                    <Option value="METRIC">Metric</Option>
+                </List>
+            </Field>
+            <Field type="checkbox" id="PumpControlOn" defaultValue="false" hidden="true">
+                <Label/>
+            </Field>
+            <Field type="textfield" id="apiVersion" hidden="true">
+                <Label/>
+            </Field>
+        </ConfigUI>
+        <States>
+            <State id="id">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Id</TriggerLabel>
+                <ControlPageLabel>Id</ControlPageLabel>
+            </State>
+            <State id="activeSchedule">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Active Rachio Schedule</TriggerLabel>
+                <ControlPageLabel>Active Rachio Schedule</ControlPageLabel>
+            </State>
+            <State id="elevation">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Elevation</TriggerLabel>
+                <ControlPageLabel>Elevation</ControlPageLabel>
+            </State>
+            <State id="latitude">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Latitude</TriggerLabel>
+                <ControlPageLabel>Latitude</ControlPageLabel>
+            </State>
+            <State id="longitude">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Longitude</TriggerLabel>
+                <ControlPageLabel>Longitude</ControlPageLabel>
+            </State>
+            <State id="address">
+                <ValueType>String</ValueType>
+                <TriggerLabel>MAC Address</TriggerLabel>
+                <ControlPageLabel>MAC Address</ControlPageLabel>
+            </State>
+            <State id="model">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Model</TriggerLabel>
+                <ControlPageLabel>Model</ControlPageLabel>
+            </State>
+            <State id="name">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Name</TriggerLabel>
+                <ControlPageLabel>Name</ControlPageLabel>
+            </State>
+            <State id="inStandbyMode">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>In Standby Mode</TriggerLabel>
+                <ControlPageLabel>In Standby Mode</ControlPageLabel>
+            </State>
+            <State id="paused">
+                <ValueType>Boolean</ValueType>
+                <TriggerLabel>Paused</TriggerLabel>
+                <ControlPageLabel>Paused</ControlPageLabel>
+            </State>
+            <State id="scheduleModeType">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Schedule Mode Type</TriggerLabel>
+                <ControlPageLabel>Schedule Mode Type</ControlPageLabel>
+            </State>
+            <State id="serialNumber">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Serial Number</TriggerLabel>
+                <ControlPageLabel>Serial Number</ControlPageLabel>
+            </State>
+            <State id="status">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Status</TriggerLabel>
+                <ControlPageLabel>Status</ControlPageLabel>
+            </State>
+            <State id="timeZone">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Time Zone</TriggerLabel>
+                <ControlPageLabel>Time Zone</ControlPageLabel>
+            </State>
+            <State id="utcOffset">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>UTC Offset</TriggerLabel>
+                <ControlPageLabel>UTC Offset</ControlPageLabel>
+            </State>
+            <!--################################ Current Conditions ################################-->
+            <State id="sep"><ValueType>Separator</ValueType></State>
+            <State id="current_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>Current Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="current_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Cloud Cover</TriggerLabel>
+                <ControlPageLabel>Current Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="current_currentTemperature">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Temperature</TriggerLabel>
+                <ControlPageLabel>Current Temperature</ControlPageLabel>
+            </State>
+            <State id="current_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Dew Point</TriggerLabel>
+                <ControlPageLabel>Current Dew Point</ControlPageLabel>
+            </State>
+            <State id="current_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Humidity</TriggerLabel>
+                <ControlPageLabel>Current Humidity</ControlPageLabel>
+            </State>
+            <State id="current_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Current Condition Icon</TriggerLabel>
+                <ControlPageLabel>Current Condition Icon</ControlPageLabel>
+            </State>
+            <State id="current_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>Current Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="current_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>Current Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="current_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Current Weather Summary</TriggerLabel>
+                <ControlPageLabel>Current Weather Summary</ControlPageLabel>
+            </State>
+            <State id="current_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>Current Weather Type</TriggerLabel>
+                <ControlPageLabel>Current Weather Type</ControlPageLabel>
+            </State>
+            <State id="current_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Current Wind Speed</TriggerLabel>
+                <ControlPageLabel>Current Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep0"><ValueType>Separator</ValueType></State><!--################################ Today's forecast ################################-->
+            <State id="t0forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t0forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t0forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t0forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t0forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t0forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t0forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t0forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t0forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t0forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t0forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>Today (T0) Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t0forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Today (T0) Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>Today (T0) Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep1"><ValueType>Separator</ValueType></State><!--################################### T1 forecast ###################################-->
+            <State id="t1forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t1forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t1forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t1forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t1forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t1forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t1forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T1 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t1forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t1forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t1forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T1 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t1forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T1 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t1forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T1 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T1 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep2"><ValueType>Separator</ValueType></State><!--################################### T2 forecast ###################################-->
+            <State id="t2forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t2forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t2forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t2forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t2forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t2forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t2forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T2 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t2forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t2forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t2forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T2 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t2forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T2 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t2forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T2 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T2 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep3"><ValueType>Separator</ValueType></State><!--################################### T3 forecast ###################################-->
+            <State id="t3forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t3forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t3forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t3forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t3forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t3forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t3forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T3 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t3forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t3forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t3forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T3 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t3forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T3 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t3forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T3 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T3 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep4"><ValueType>Separator</ValueType></State><!--################################### T4 forecast ###################################-->
+            <State id="t4forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t4forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t4forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t4forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t4forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t4forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t4forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T4 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t4forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t4forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t4forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T4 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t4forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T4 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t4forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T4 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T4 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep5"><ValueType>Separator</ValueType></State><!--################################### T5 forecast ###################################-->
+            <State id="t5forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t5forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t5forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t5forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t5forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t5forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t5forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T5 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t5forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t5forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t5forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T5 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t5forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T5 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t5forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T5 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T5 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep6"><ValueType>Separator</ValueType></State><!--################################### T6 forecast ###################################-->
+            <State id="t6forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t6forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t6forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t6forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t6forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t6forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t6forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T6 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t6forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t6forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t6forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T6 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t6forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T6 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t6forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T6 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T6 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep7"><ValueType>Separator</ValueType></State><!--################################### T7 forecast ###################################-->
+            <State id="t7forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t7forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t7forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t7forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t7forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t7forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t7forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T7 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t7forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t7forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t7forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T7 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t7forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T7 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t7forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T7 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T7 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep8"><ValueType>Separator</ValueType></State><!--################################### T8 forecast ###################################-->
+            <State id="t8forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t8forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t8forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t8forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t8forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t8forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t8forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T8 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t8forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t8forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t8forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T8 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t8forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T8 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t8forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T8 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T8 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep9"><ValueType>Separator</ValueType></State><!--################################### T9 forecast ###################################-->
+            <State id="t9forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t9forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t9forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t9forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t9forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t9forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t9forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T9 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t9forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t9forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t9forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T9 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t9forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T9 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t9forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T9 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T9 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep10"><ValueType>Separator</ValueType></State><!--################################### T10 forecast ###################################-->
+            <State id="t10forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t10forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t10forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t10forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t10forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t10forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t10forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T10 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t10forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t10forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t10forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T10 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t10forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T10 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t10forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T10 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T10 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep11"><ValueType>Separator</ValueType></State><!--################################### T11 forecast ###################################-->
+            <State id="t11forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t11forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t11forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t11forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t11forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t11forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t11forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T11 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t11forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t11forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t11forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T11 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t11forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T11 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t11forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T11 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T11 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep12"><ValueType>Separator</ValueType></State><!--################################### T12 forecast ###################################-->
+            <State id="t12forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t12forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t12forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t12forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t12forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t12forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t12forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T12 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t12forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t12forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t12forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T12 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t12forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T12 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t12forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T12 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T12 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+            <State id="sep13"><ValueType>Separator</ValueType></State><!--################################### T13 forecast ###################################-->
+            <State id="t13forecast_calculatedPrecip">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Calculated Precipitation</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Calculated Precipitation</ControlPageLabel>
+            </State>
+            <State id="t13forecast_cloudCover">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Cloud Cover</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Cloud Cover</ControlPageLabel>
+            </State>
+            <State id="t13forecast_temperatureMin">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Low Temperature</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t13forecast_temperatureMax">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - High Temperature</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - High Temperature</ControlPageLabel>
+            </State>
+            <State id="t13forecast_dewPoint">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Dew Point</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Dew Point</ControlPageLabel>
+            </State>
+            <State id="t13forecast_humidity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Humidity</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Humidity</ControlPageLabel>
+            </State>
+            <State id="t13forecast_iconUrl">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T13 Forecast - Condition Icon</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Condition Icon</ControlPageLabel>
+            </State>
+            <State id="t13forecast_precipIntensity">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Precipitation Intensity</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Precipitation Intensity</ControlPageLabel>
+            </State>
+            <State id="t13forecast_precipProbability">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Precipitation Probability</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Precipitation Probability</ControlPageLabel>
+            </State>
+            <State id="t13forecast_weatherSummary">
+                <ValueType>String</ValueType>
+                <TriggerLabel>T13 Forecast - Weather Summary</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Weather Summary</ControlPageLabel>
+            </State>
+            <State id="t13forecast_weatherType">
+                <ValueType>
+                    <List>
+                        <Option value="sun">Sun</Option>
+                        <Option value="clear-day">Clear (Day)</Option>
+                        <Option value="clear-night">Clear (Night)</Option>
+                        <Option value="partly-cloudy-day">Partly Cloudy (Day)</Option>
+                        <Option value="partly-cloudy-night">Partly Cloudy (Night)</Option>
+                        <Option value="fog">Fog</Option>
+                        <Option value="cloudy">Cloudy</Option>
+                        <Option value="wind">Windy</Option>
+                        <Option value="rain">Rain</Option>
+                        <Option value="sleet">Sleet</Option>
+                        <Option value="snow">Snow</Option>
+                    </List>
+                </ValueType>
+                <TriggerLabel>T13 Forecast - Weather Type</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Weather Type</ControlPageLabel>
+            </State>
+            <State id="t13forecast_windSpeed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>T13 Forecast - Wind Speed</TriggerLabel>
+                <ControlPageLabel>T13 Forecast - Wind Speed</ControlPageLabel>
+            </State>
+        </States>
+    </Device>
+</Devices>

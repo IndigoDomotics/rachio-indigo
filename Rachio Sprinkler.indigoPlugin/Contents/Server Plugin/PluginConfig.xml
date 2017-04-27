@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<PluginConfig>
+    <Field id="topLabel" type="label">
+        <Label>To use the Rachio Plugin, you need to enter your API token, which is found in the Rachio web app (https://app.rach.io/).</Label>
+    </Field>
+    <Field id="accessToken" type="textfield">
+        <Label>API token:</Label>
+    </Field>
+    <Field id="apiCallTimeout" type="textfield" defaultValue="5">
+        <Label>API call timeout:</Label>
+    </Field>
+	<Field id="apiCallTimeoutLabel" type="label" fontSize="small" fontColor="darkgray">
+		<Label>Number of seconds to wait for the API to reply before continuing. You probably don't need to adjust this unless instructed by support.</Label>
+	</Field>
+</PluginConfig>

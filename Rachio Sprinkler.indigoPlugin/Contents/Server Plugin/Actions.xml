@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<!-- By default sprinkler type devices will inherit all
+     SprinklerAction actions, which will be dispatched to
+     the actionControlSprinkler() method defined in plugin.py.
+
+     Additional custom actions can also be defined here. The
+     example below defines a custom action to modify the brightness
+     of the backlit display of the module, and to modify the custom
+     backlightBrightness state added to Devices.xml.
+-->
+<Actions>
+    <Action id="runSchedule" deviceFilter="self">
+        <Name>Run Rachio Schedule</Name>
+        <CallbackMethod>runRachioSchedule</CallbackMethod>
+        <ConfigUI>
+            <Field type="label" id="schedule_label">
+                <Label>Select the Rachio schedule to run from the list below. Note, not all Rachio schedules can be run dynamically so only some may show in the list.</Label>
+            </Field>
+            <Field type="menu" id="scheduleId">
+                <Label>Schedule:</Label>
+                <List class="self" method="availableSchedules"/>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="setSeasonalAdjustment" deviceFilter="self">
+        <Name>Set Seasonal Adjustment</Name>
+        <CallbackMethod>setSeasonalAdjustment</CallbackMethod>
+        <ConfigUI>
+            <Field type="menu" id="scheduleId">
+                <Label>Schedule:</Label>
+                <List class="self" method="availableSchedules"/>
+            </Field>
+            <Field type="textfield" id="adjustment">
+                <Label>Adjustment percentage:</Label>
+            </Field>
+            <Field type="label" id="adj_label" alignWithControl="true" fontSize="small" fontColor="darkgray">
+                <Label>Adjustment value is an integer range from -100 (-100%) to 100 (100%). For example, 50 increases by 50%, -33 reduces by 33%.</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="setStandbyMode" deviceFilter="self">
+        <Name>Set Standby Mode</Name>
+        <CallbackMethod>setStandbyMode</CallbackMethod>
+        <ConfigUI>
+            <Field type="label" id="standby_label">
+                <Label>Enabling standby mode will turn off all automated functions in the Rachio - so none of it's schedules will automatically run, etc.</Label>
+            </Field>
+            <Field type="checkbox" id="mode">
+                <Label>Standby mode:</Label>
+                <Description>Enabled</Description>
+            </Field>
+        </ConfigUI>
+    </Action>
+</Actions>
