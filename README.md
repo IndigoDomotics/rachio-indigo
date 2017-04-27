@@ -115,6 +115,8 @@ Forecast data is available for 14 days including the current day. In the list be
 | sleet               | Sleeting                     |
 | snow                | Snowing                      |
 
+Probably the best use of these enumerated values is for custom state images on control pages. If you come up with some nice images, share them in the [Contribution Library](https://www.indigodomo.com/library/).
+
 ### Troubleshooting
 
 Debugging information is written to the plugin's log file, located here:
