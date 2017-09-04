@@ -9,7 +9,7 @@
      backlightBrightness state added to Devices.xml.
 -->
 <Actions>
-    <Action id="runSchedule" deviceFilter="self">
+    <Action id="runSchedule" deviceFilter="self" uiPath="DeviceActions">
         <Name>Run Rachio Schedule</Name>
         <CallbackMethod>runRachioSchedule</CallbackMethod>
         <ConfigUI>
@@ -22,7 +22,7 @@
             </Field>
         </ConfigUI>
     </Action>
-    <Action id="setSeasonalAdjustment" deviceFilter="self">
+    <Action id="setSeasonalAdjustment" deviceFilter="self" uiPath="DeviceActions">
         <Name>Set Seasonal Adjustment</Name>
         <CallbackMethod>setSeasonalAdjustment</CallbackMethod>
         <ConfigUI>
@@ -38,7 +38,7 @@
             </Field>
         </ConfigUI>
     </Action>
-    <Action id="setStandbyMode" deviceFilter="self">
+    <Action id="setStandbyMode" deviceFilter="self" uiPath="DeviceActions">
         <Name>Set Standby Mode</Name>
         <CallbackMethod>setStandbyMode</CallbackMethod>
         <ConfigUI>
