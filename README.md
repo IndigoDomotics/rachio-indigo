@@ -9,7 +9,7 @@ Any Rachio device that is supported by [v1 of their API](https://rachio.readme.i
 
 ### Installation Instructions
 
-1. Download latest release [here](https://github.com/IndigoDomotics/INSERTLINKHERE).
+1. Download latest release [here](https://github.com/IndigoDomotics/rachio-indigo/releases).
 2. Follow [standard plugin installation process](http://wiki.indigodomo.com/doku.php?id=indigo_7_documentation:getting_started#installing_plugins_configuring_plugin_settings_permanently_removing_plugins).
 
 ### Usage
