@@ -42,7 +42,6 @@ SCHEDULERULE_SEASONAL_ADJ_URL   = SCHEDULERULE_URL.format(apiVersion=RACHIO_API_
 FORECAST_FIELDS_USED = {
     "calculatedPrecip": "decimalPlaces:2",
     "cloudCover": "percentage",
-    "currentTemperature": "decimalPlaces:1",
     "dewPoint": "decimalPlaces:1",
     "humidity": "percentage",
     "iconUrl": "",
