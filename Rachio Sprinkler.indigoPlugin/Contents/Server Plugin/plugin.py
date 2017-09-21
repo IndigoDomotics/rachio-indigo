@@ -42,6 +42,7 @@ SCHEDULERULE_SEASONAL_ADJ_URL   = SCHEDULERULE_URL.format(apiVersion=RACHIO_API_
 FORECAST_FIELDS_USED = {
     "calculatedPrecip": "decimalPlaces:2",
     "cloudCover": "percentage",
+    "currentTemperature": "decimalPlaces:1",
     "dewPoint": "decimalPlaces:1",
     "humidity": "percentage",
     "iconUrl": "",
@@ -278,7 +279,9 @@ class Plugin(indigo.PluginBase):
                 forecasts_sorted = sorted(reply_dict["forecast"], key=itemgetter("time"))
                 for count, forecast in enumerate(forecasts_sorted):
                     for k, v in forecast.iteritems():
-                        if k in FORECAST_FIELDS_USED:
+                        # For some strange reason, the API started returning currentTemperature for forecast days, which
+                        # makes no sense because it's a FORECAST (nothing current about it). So, we'll just ignore it.
+                        if k in FORECAST_FIELDS_USED and k != "currentTemperature":
                             update_dict = {"key": "t{}forecast_{}".format(count, k), "value": v}
                             if "decimalPlaces" in FORECAST_FIELDS_USED[k]:
                                 update_dict["decimalPlaces"]= FORECAST_FIELDS_USED[k].split(":")[1]
