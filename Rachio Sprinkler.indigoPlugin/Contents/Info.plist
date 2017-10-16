@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>PluginVersion</key>
-	<string>1.0.2</string>
+	<string>1.0.3</string>
 	<key>ServerApiVersion</key>
 	<string>2.0</string>
 	<key>IwsApiVersion</key>
@@ -13,12 +13,23 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.indigodomo.opensource.rachio</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.0</string>
+	<string>1.0.1</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
 			<string>https://github.com/IndigoDomotics/rachio-indigo</string>
+		</dict>
+	</array>
+	<key>GithubInfo</key>
+	<array>
+		<dict>
+			<key>GithubRepo</key>
+			<string>rachio-indigo</string>
+		</dict>
+		<dict>
+			<key>GithubUser</key>
+			<string>IndigoDomotics</string>
 		</dict>
 	</array>
 </dict>
