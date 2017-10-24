@@ -22,15 +22,11 @@
 		</dict>
 	</array>
 	<key>GithubInfo</key>
-	<array>
-		<dict>
-			<key>GithubRepo</key>
-			<string>rachio-indigo</string>
-		</dict>
-		<dict>
-			<key>GithubUser</key>
-			<string>IndigoDomotics</string>
-		</dict>
-	</array>
+	<dict>
+		<key>GithubRepo</key>
+		<string>rachio-indigo</string>
+		<key>GithubUser</key>
+		<string>IndigoDomotics</string>
+	</dict>
 </dict>
 </plist>
