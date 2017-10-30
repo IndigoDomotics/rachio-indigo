@@ -16,13 +16,13 @@ Any Rachio device that is supported by [v1 of their API](https://rachio.readme.i
 
 To configure the plugin, you need to enter your API access token into the plugin's config dialog (**`Plugins->Rachio Sprinklers->Configure...`**).
 
-![Plugin Config Dialog](https://github.com/IndigoDomotics/rachio-indigo/blob/master/doc-images/plugin-config.png)
+![Plugin Config Dialog](https://github.com/IndigoDomotics/rachio-indigo/raw/master/doc-images/plugin-config.png)
 
 You can find your API key in your Rachio web account. You probably don't need to adjust the API timeout, but if you have frequent timeout errors then increasing by a couple of seconds may help.
 
 Once you have the plugin configured, you can use the standard [Indigo device creation process](http://wiki.indigodomo.com/doku.php?id=indigo_7_documentation:overview#devices). Select **`Rachio Sprinklers`** as the type and **`Rachio Sprinkler Controller`** as the model. When you do that, you'll get the **`Configure Rachio Sprinkler Controller`** dialog:
 
-![Sprinkler Config Dialog](https://github.com/IndigoDomotics/rachio-indigo/blob/master/doc-images/sprinkler-config.png)
+![Sprinkler Config Dialog](https://github.com/IndigoDomotics/rachio-indigo/raw/master/doc-images/sprinkler-config.png)
 
 Select a Rachio device from the first popup and select US (imperial) or Metric for units of measure when retrieving weather data. Save the dialog.
 
