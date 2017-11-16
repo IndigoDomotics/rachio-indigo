@@ -1,4 +1,4 @@
-## About the Rachio Sprinklers plugin
+## About the Rachio Sprinkler plugin
 
 This [Indigo](http://www.indigodomo.com/) plugin integrates [Rachio Sprinkler controllers](http://rachio.com) as standard [Indigo sprinkler devices](http://www.indigodomo.com/docs/overview#sprinkler_controls). Any Rachio device that is supported by [v1 of their API](https://rachio.readme.io/v1.0/docs) should work.
 
