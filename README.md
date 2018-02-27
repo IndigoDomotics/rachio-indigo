@@ -1,3 +1,5 @@
+**Warning as of February 27th, 2018**  - Rachio has apparently started throttling API requests which causes the plugin to fail. Unfortunately, they haven't published anything concerning what the throttle limitations, what API calls trigger them, or how to recover once a trigger point has been crossed. So, at this time, we can't recommend that you rely on this plugin to control your sprinkler. Until we can solve this issue, we recommend that if you already have a Rachio controller that you use their built-in scheduling. If you don't have one and are interested in controlling it from Indigo, I'd recommend waiting to purchase until we can sort these issues out. You can monitor our progress by watching [the end of this thread](http://forums.indigodomo.com/viewtopic.php?p=155627#p155627).
+
 ## About the Rachio Sprinkler plugin
 
 This [Indigo](http://www.indigodomo.com/) plugin integrates [Rachio Sprinkler controllers](http://rachio.com) as standard [Indigo sprinkler devices](http://www.indigodomo.com/docs/overview#sprinkler_controls). Any Rachio device that is supported by [v1 of their API](https://rachio.readme.io/v1.0/docs) should work.
