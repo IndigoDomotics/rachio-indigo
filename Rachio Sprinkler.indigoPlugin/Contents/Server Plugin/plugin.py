@@ -14,14 +14,16 @@ import json
 import copy
 import traceback
 from operator import itemgetter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from dateutil import tz
+from distutils.version import LooseVersion
 
 RACHIO_API_VERSION              = "1"
 RACHIO_MAX_ZONE_DURATION        = 10800
-DEFAULT_API_CALL_TIMEOUT        = 5
-DEFAULT_POLLING_INTERVAL        = 60   # number of seconds between each poll, default is 1 minute
-DEFAULT_WEATHER_UPDATE_INTERVAL = DEFAULT_POLLING_INTERVAL * 10  # number of seconds between each forecast update, default is 10 minutes
+DEFAULT_API_CALL_TIMEOUT        = 5      # number of seconds after which we timeout any network calls
+MINIMUM_POLLING_INTERVAL        = 3      # number of minutes between each poll, default is 3 (changed 2/27/2018 to help avoid throttling)
+DEFAULT_WEATHER_UPDATE_INTERVAL = 10     # number of minutes between each forecast update, default is 10
+THROTTLE_LIMIT_TIMER            = 61     # number of minutes to wait if we've received a throttle error before doing any API calls
 
 API_URL                         = "https://api.rach.io/{apiVersion}/public/"
 PERSON_URL                      = API_URL + "person/{personId}"
@@ -55,6 +57,24 @@ FORECAST_FIELDS_USED = {
     "windSpeed": "decimalPlaces:2",
 }
 
+ALL_OPERATIONAL_ERROR_EVENTS = {
+    "startZoneFailed",
+    "stopFailed",
+    "startRachioScheduleFailed",
+    "setSeasonalAdjustmentFailed",
+    "setStandbyFailed",
+}
+
+ALL_COMM_ERROR_EVENTS = {
+    "personCall",
+    "personInfoCall",
+    "getScheduleCall",
+    "forecastCall",
+}
+
+class ThrottleDelayError(Exception):
+    pass
+
 def convert_timestamp(timestamp):
     from_zone = tz.tzutc()
     to_zone = tz.tzlocal()
@@ -70,10 +90,9 @@ class Plugin(indigo.PluginBase):
         super(Plugin, self).__init__(pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
         # Used to control when to show connection errors (vs just repeated retries)
         self._displayed_connection_error = False
-        # Not currently exposed in the plugin prefs, but we can if necessary
         self.debug = pluginPrefs.get("showDebugInfo", False)
         # Not currently exposed in the plugin prefs, but we can if necessary
-        self.pollingInterval = pluginPrefs.get("pollingInterval", DEFAULT_POLLING_INTERVAL)
+        self.pollingInterval = int(pluginPrefs.get("pollingInterval", MINIMUM_POLLING_INTERVAL))
         # Not currently exposed in the plugin prefs, but we can if necessary
         self.timeout = int(pluginPrefs.get("apiTimeout", DEFAULT_API_CALL_TIMEOUT))
 
@@ -86,12 +105,78 @@ class Plugin(indigo.PluginBase):
         else:
             self.logger.warn("You must specify your API token in the plugin's config before the plugin can be used.")
             self.headers = None
+        self.triggerDict = {}
         self._next_weather_update = datetime.now()
-        #self._update_from_rachio()
+        self.throttle_next_call = None
+        self.version_check_email = pluginPrefs.get("versionCheckEmail", None)
+        # Check for updates at 8pm local time every day. Not that it matters that much, but seems like it's about the
+        # best time in general.
+        now = datetime.now()
+        target_date = now.date()
+        target_time = time(20)
+        if target_time < now.time():
+            target_date = (now + timedelta(days=1)).date()
+        self.next_version_check = datetime(target_date.year, target_date.month, target_date.day, 20)
 
-    def _make_api_call(self, url, request_method="get", data=None):
-        return_val = None
+    ########################################
+    # Internal helper methods
+    ########################################
+    def _version_check(self, pluginId=None):
+        if not pluginId:
+            pluginId = self.pluginId
+        # Create some URLs we'll use later on
+        current_version_url = "https://api.indigodomo.com/api/v2/pluginstore/plugin-version-info.json?pluginId={}".format(
+            pluginId
+        )
+        store_detail_url = "https://www.indigodomo.com/pluginstore/{}/"
         try:
+            # GET the url from the servers with a short timeout (avoids hanging the plugin)
+            reply = requests.get(current_version_url, timeout=5)
+            # This will raise an exception if the server returned an error
+            reply.raise_for_status()
+            # We now have a good reply so we get the json
+            reply_dict = reply.json()
+            plugin_dict = reply_dict["plugins"][0]
+            # Make sure that the 'latestRelease' element is a dict (could be a string for built-in plugins).
+            latest_release = plugin_dict["latestRelease"]
+            if isinstance(latest_release, dict):
+                # Compare the current version with the one returned in the reply dict
+                if LooseVersion(latest_release["number"]) > LooseVersion(self.pluginVersion):
+                    # The release in the store is newer than the current version.
+                    # We'll do a couple of things: first, we'll just log it
+                    self.logger.info(
+                        "A new version of the plugin (v{}) is available at: {}".format(
+                            latest_release["number"],
+                            store_detail_url.format(plugin_dict["id"])
+                        )
+                    )
+                    # We'll change the value of a variable named "Plugin_Name_Current_Version" to the new version number
+                    # which the user can then build a trigger on (or whatever).
+                    try:
+                        variable_name = u"{}_Available_Version".format(self.pluginDisplayName.replace(" ", "_"))
+                        indigo.variable.updateValue(variable_name, latest_release["number"])
+                    except:
+                        # The variable probably doesn't exist - we don't care so just skip it
+                        pass
+                    # Fire the version update event so users can trigger from it and do whatever they want.
+                    self._fireTrigger("updateAvailable")
+                else:
+                    self.logger.info(u"No plugin updates available.")
+        except Exception as exc:
+            self.logger.error(unicode(exc))
+        self.next_version_check = datetime.now() + timedelta(days=1)
+
+    ########################################
+    def _make_api_call(self, url, request_method="get", data=None):
+        try:
+            if self.throttle_next_call:
+                if self.throttle_next_call > datetime.now():
+                    # Too soon, raise exception
+                    raise ThrottleDelayError("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
+                        self.throttle_next_call))
+                else:
+                    self.throttle_next_call = None
+            return_val = None
             if request_method == "put":
                 method = requests.put
             elif request_method == "post":
@@ -127,11 +212,22 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("Connection to Rachio API server failed. Will continue to retry silently.")
                 self._displayed_connection_error = True
             raise exc
+        except requests.exceptions.HTTPError as exc:
+            if exc.response.status == 429:
+                # We've hit the throttle limit - we need to back off on all requests for some period of time
+                self.throttle_next_call = datetime.now()+timedelta(minutes=THROTTLE_LIMIT_TIMER)
+                self._fireTrigger("rateLimitExceeded")
+            raise exc
+        except ThrottleDelayError as exc:
+            self.logger.error(str(exc))
+            self.logger.debug("{}:\n{}".format(str(exc), traceback.format_exc(10)))
+            raise exc
         except Exception as exc:
             self.logger.error("Connection to Rachio API server failed with exception: {}. Check the log file for full details.".format(exc.__class__.__name__))
             self.logger.debug("Connection to Rachio API server failed with exception:\n{}".format(traceback.format_exc(10)))
             raise exc
 
+    ########################################
     def _get_device_dict(self, id):
         dev_list = [dev_dict for dev_dict in self.person["devices"] if dev_dict["id"] == id]
         if len(dev_list):
@@ -139,6 +235,7 @@ class Plugin(indigo.PluginBase):
         else:
             return None
 
+    ########################################
     def _get_zone_dict(self, id, zoneNumber):
         dev_dict = self._get_device_dict(id)
         if dev_dict:
@@ -158,14 +255,18 @@ class Plugin(indigo.PluginBase):
                         self.pluginPrefs["personId"] = self.person_id
                     except Exception as exc:
                         self.logger.error("Error getting user ID from Rachio via API.")
+                        self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                        self._fireTrigger("personCall")
                         return
                 try:
                     reply_dict = self._make_api_call(PERSON_URL.format(apiVersion=RACHIO_API_VERSION, personId=self.person_id))
-                except:
+                    self.person = reply_dict
+                    self.rachio_devices = self.person["devices"]
+                except Exception as exc:
                     self.logger.error("Error getting user data from Rachio via API.")
+                    self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                    self._fireTrigger("personInfoCall")
                     return
-                self.person = reply_dict
-                self.rachio_devices = self.person["devices"]
                 current_device_uuids = [s.states["id"] for s in indigo.devices.iter(filter="self.sprinkler")]
                 self.unused_devices = {dev_dict["id"]: dev_dict for dev_dict in self.person["devices"] if dev_dict["id"] not in current_device_uuids}
                 self.defined_devices = {dev_dict["id"]: dev_dict for dev_dict in self.person["devices"] if dev_dict["id"] in current_device_uuids}
@@ -227,10 +328,11 @@ class Plugin(indigo.PluginBase):
                                     update_list.append({"key": "activeZone", "value": 0})
                             except Exception as exc:
                                 update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
+                                self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                                self._fireTrigger("getScheduleCall")
                             # Send the state updates to the server
                             if len(update_list):
                                 dev.updateStatesOnServer(update_list)
-
                             # Update zone information as necessary - these are properties, not states.
                             zoneNames = ""
                             maxZoneDurations = ""
@@ -253,13 +355,18 @@ class Plugin(indigo.PluginBase):
         except Exception as exc:
             self.logger.error("Unknown error:\n{}".format(traceback.format_exc(10)))
 
+    ########################################
     def _update_forecast_data(self, dev):
         if datetime.now() >= self._next_weather_update:
             try:
                 units = dev.pluginProps["units"]
-                reply_dict = self._make_api_call(DEVICE_GET_FORECAST_URL.format(apiVersion=RACHIO_API_VERSION,
-                                                                                deviceId=dev.states["id"],
-                                                                                units=units))
+                reply_dict = self._make_api_call(
+                    DEVICE_GET_FORECAST_URL.format(
+                        apiVersion=RACHIO_API_VERSION,
+                        deviceId=dev.states["id"],
+                        units=units
+                    )
+                )
                 current_conditions = reply_dict["current"]
                 state_update_list = []
                 for k, v in current_conditions.iteritems():
@@ -296,14 +403,20 @@ class Plugin(indigo.PluginBase):
                 self._next_weather_update = datetime.now() + timedelta(seconds=DEFAULT_WEATHER_UPDATE_INTERVAL)
             except Exception as exc:
                 self.logger.error("Error getting forecast data from Rachio via API.")
+                self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                self._fireTrigger("forecastCall")
 
+    ########################################
+    # startup, concurrent thread, and shutdown methods
     ########################################
     def startup(self):
         pass
 
+    ########################################
     def shutdown(self):
         pass
 
+    ########################################
     def runConcurrentThread(self):
         self.logger.debug("Starting concurrent tread")
         try:
@@ -311,12 +424,13 @@ class Plugin(indigo.PluginBase):
             # But since that would currently require an IWS handler and some way to communicate between the two we'll
             # save that for later when the two APIs are integrated.
             while True:
+                if self.next_version_check < datetime.now():
+                    self._version_check()
                 try:
                     self._update_from_rachio()
                 except:
                     pass
-                self.sleep(self.pollingInterval)
-
+                self.sleep(self.pollingInterval*60)
         except self.StopThread:
             self.logger.debug("Received StopThread")
 
@@ -341,7 +455,11 @@ class Plugin(indigo.PluginBase):
         return schedule_list
 
     ########################################
-    # Valication callbacks
+    def sprinklerList(self, filter="", valuesDict=None, typeId="", targetId=0):
+        return [(s.id, s.name) for s in indigo.devices.iter(filter="self.sprinkler")]
+
+    ########################################
+    # Validation callbacks
     ########################################
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
         if devId:
@@ -358,9 +476,31 @@ class Plugin(indigo.PluginBase):
         if typeId == "setSeasonalAdjustment":
             try:
                 if int(valuesDict["adjustment"]) not in range(-100, 100):
-                    raise
+                    raise Exception()
             except:
                 errorsDict["adjustment"] = "Must be an integer from -100 to 100 (a percentage)"
+        if len(errorsDict):
+            return False, valuesDict, errorsDict
+        return True, valuesDict
+
+    ########################################
+    def validateEventConfigUi(self, valuesDict, typeId, devId):
+        errorsDict = indigo.Dict()
+        if typeId == "sprinklerError":
+            if valuesDict["id"] == "":
+                errorsDict["id"] = u"You must select a Rachio Sprinkler device."
+        if len(errorsDict):
+            return False, valuesDict, errorsDict
+        return True, valuesDict
+
+    ########################################
+    def validatePrefsConfigUi(self, valuesDict):
+        errorsDict = indigo.Dict()
+        try:
+            if int(valuesDict['pollingInterval']) < 3:
+                raise Exception()
+        except:
+            errorsDict["pollingInterval"] = u"Must be a number greater than or equal to 3 (minutes)."
         if len(errorsDict):
             return False, valuesDict, errorsDict
         return True, valuesDict
@@ -415,6 +555,7 @@ class Plugin(indigo.PluginBase):
                         update_list.append({"key": "activeZone", "value": 0})
                 except:
                     update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
+                    self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
                 # Send the state updates to the server
                 if len(update_list):
                     dev.updateStatesOnServer(update_list)
@@ -441,13 +582,62 @@ class Plugin(indigo.PluginBase):
                 self._update_forecast_data(dev)
             else:
                 self.logger.error("Rachio device '{}' configured with unknown ID. Reconfigure the device to make it active.".format(dev.name))
-        else:
-            self._next_weather_update = datetime.now()
-            self._update_from_rachio()
 
+    ########################################
     def deviceStopComm(self, dev):
-        self._next_weather_update = datetime.now()
-        self._update_from_rachio()
+        pass
+
+    ########################################
+    # Event callbacks
+    ########################################
+    #  All things that could trigger an event call this method which will do the dispatch
+    ########################################
+    def _fireTrigger(self, event, dev_id=None):
+        try:
+            for triggerId, trigger in self.triggerDict.items():
+                if trigger.pluginTypeId == "sprinklerError":
+                    if int(trigger.pluginProps["id"]) == dev_id:
+                        # for the all trigger type, we fire any event that's in the ALL_OPERATIONAL_ERROR_EVENTS
+                        # list we defined at the top.
+                        type = trigger.pluginProps["errorType"]
+                        if type == "all" and event in ALL_OPERATIONAL_ERROR_EVENTS:
+                            indigo.trigger.execute(trigger)
+                        # then we fire if the event specifically matches the trigger type
+                        if type == event:
+                            indigo.trigger.execute(trigger)
+                elif trigger.pluginTypeId == "commError":
+                    type = trigger.pluginProps["errorType"]
+                    # first we fire the trigger if it's any comm error in the ALL_COMM_ERROR_EVENTS list
+                    if type == "allCommErrors" and event in ALL_COMM_ERROR_EVENTS:
+                        indigo.trigger.execute(trigger)
+                    # then we fire if the event specifically matches the trigger type
+                    if type == event:
+                        indigo.trigger.execute(trigger)
+                elif trigger.pluginTypeId == event:
+                    # an update is available, just fire the trigger since there's nothing else to look at
+                    indigo.trigger.execute(trigger)
+        except Exception as exc:
+            self.logger.error(u"An error occurred during trigger processing")
+            self.logger.debug(u"An error occurred during trigger processing: \n{}".format(traceback.format_exc(10)))
+
+    ########################################
+    def triggerStartProcessing(self, trigger):
+        super(Plugin, self).triggerStartProcessing(trigger)
+        self.logger.debug("Start processing trigger " + str(trigger.id))
+        if trigger.id not in self.triggerDict:
+            self.triggerDict[trigger.id] = trigger
+        self.logger.debug("Start trigger processing list: " + str(self.triggerDict))
+
+    ########################################
+    def triggerStopProcessing(self, trigger):
+        super(Plugin, self).triggerStopProcessing(trigger)
+        self.logger.debug("Stop processing trigger " + str(trigger.id))
+        try:
+            del self.triggerDict[trigger.id]
+        except:
+            # the trigger isn't in the list for some reason so just skip it
+            pass
+        self.logger.debug("Stop trigger processing list: " + str(self.triggerDict))
 
     ########################################
     # Sprinkler Control Action callback
@@ -455,23 +645,32 @@ class Plugin(indigo.PluginBase):
     def actionControlSprinkler(self, action, dev):
         ###### ZONE ON ######
         if action.sprinklerAction == indigo.kSprinklerAction.ZoneOn:
-            zone_dict = self._get_zone_dict(dev.states["id"], action.zoneIndex)
-            if zone_dict:
-                zoneName = zone_dict["name"]
-                data = {
-                    "id": zone_dict["id"],
-                    "duration": zone_dict["maxRuntime"] if zone_dict["maxRuntime"] <= RACHIO_MAX_ZONE_DURATION else RACHIO_MAX_ZONE_DURATION,
-                }
-                try:
-                    self._make_api_call(ZONE_START_URL.format(apiVersion=RACHIO_API_VERSION), request_method="put", data=data)
-                    self.logger.info(u'sent "{} - {}" on'.format(dev.name, zoneName))
-                    dev.updateStateOnServer("activeZone", action.zoneIndex)
-                except:
-                    # Else log failure but do NOT update state on Indigo Server.
-                    self.logger.error(u'send "{} - {}" on failed'.format(dev.name, zoneName))
+            if self.throttle_next_call:
+                self.logger.error("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
+                    self.throttle_next_call)
+                )
+                self._fireTrigger("startZoneFailed", dev.id)
             else:
-                self.logger.error("Zone number {} doesn't exist in this controller and can't be enabled.".format(action.zoneIndex))
-                # FIXME: do we want to send a subscription notification here on failure?
+                zone_dict = self._get_zone_dict(dev.states["id"], action.zoneIndex)
+                if zone_dict:
+                    zoneName = zone_dict["name"]
+                    data = {
+                        "id": zone_dict["id"],
+                        "duration": zone_dict["maxRuntime"] if zone_dict["maxRuntime"] <= RACHIO_MAX_ZONE_DURATION else RACHIO_MAX_ZONE_DURATION,
+                    }
+                    try:
+                        self._make_api_call(ZONE_START_URL.format(apiVersion=RACHIO_API_VERSION), request_method="put", data=data)
+                        self.logger.info(u'sent "{} - {}" on'.format(dev.name, zoneName))
+                        dev.updateStateOnServer("activeZone", action.zoneIndex)
+                    except:
+                        # Else log failure but do NOT update state on Indigo Server. Also, fire any triggers the user has
+                        # on zone start failures.
+                        self.logger.error(u'send "{} - {}" on failed'.format(dev.name, zoneName))
+                        self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                        self._fireTrigger("startZoneFailed", dev.id)
+                else:
+                    self.logger.error("Zone number {} doesn't exist in this controller and can't be enabled.".format(action.zoneIndex))
+                    self._fireTrigger("startZoneFailed", dev.id)
 
         ###### ALL ZONES OFF ######
         elif action.sprinklerAction == indigo.kSprinklerAction.AllZonesOff:
@@ -485,7 +684,8 @@ class Plugin(indigo.PluginBase):
             except:
                 # Else log failure but do NOT update state on Indigo Server.
                 self.logger.info(u'send "{}" {} failed'.format(dev.name, "all zones off"))
-                # FIXME: do we want to send a subscription notification here on failure?
+                self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                self._fireTrigger("stopFailed", dev.id)
 
         ############################################
         # TODO: The next sprinkler actions won't currently be called because we haven't set the OverrideScheduleActions
@@ -504,7 +704,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     # General Action callback
-    ######################
+    ########################################
     def actionControlUniversal(self, action, dev):
         ###### STATUS REQUEST ######
         if action.deviceAction == indigo.kUniversalAction.RequestStatus:
@@ -516,44 +716,60 @@ class Plugin(indigo.PluginBase):
     ########################################
     def runRachioSchedule(self, pluginAction, dev):
         schedule_rule_id = pluginAction.props["scheduleId"]
-        dev_dict = self._get_device_dict(dev.states["id"])
-        if dev_dict:
-            schedule_id_dict = {rule_dict["id"]: rule_dict["name"] for rule_dict in dev_dict["scheduleRules"]}
-            if schedule_rule_id in schedule_id_dict.keys():
-                try:
-                    data = {
-                        "id": schedule_rule_id,
-                    }
-                    self._make_api_call(SCHEDULERULE_START_URL, request_method="put", data=data)
-                    self.logger.info("Rachio schedule '{}' started".format(schedule_id_dict[schedule_rule_id]))
-                    return
-                except Exception as exc:
-                    pass
-        self.logger.error("No Rachio schedule found matching action configuration - check your action.")
+        if self.throttle_next_call:
+            self.logger.error("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
+                    self.throttle_next_call)
+            )
+            self._fireTrigger("startRachioScheduleFailed", dev.id)
+        else:
+            dev_dict = self._get_device_dict(dev.states["id"])
+            if dev_dict:
+                schedule_id_dict = {rule_dict["id"]: rule_dict["name"] for rule_dict in dev_dict["scheduleRules"]}
+                if schedule_rule_id in schedule_id_dict.keys():
+                    try:
+                        data = {
+                            "id": schedule_rule_id,
+                        }
+                        self._make_api_call(SCHEDULERULE_START_URL, request_method="put", data=data)
+                        self.logger.info("Rachio schedule '{}' started".format(schedule_id_dict[schedule_rule_id]))
+                        self.logger.warn("Note: frequently requesting dynamic status updates may cause failures later because of Rachio API polling limits. Use sparingly.")
+                        return
+                    except Exception as exc:
+                        self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                        self._fireTrigger("startRachioScheduleFailed", dev.id)
+            self.logger.error("No Rachio schedule found matching action configuration - check your action.")
 
+    ########################################
     def setSeasonalAdjustment(self, pluginAction, dev):
         try:
             if int(pluginAction.props["adjustment"]) not in range(-100, 100):
-                raise
+                raise Exception()
         except:
             self.logger.error("Seasonal adjustments must be specified as an integer from -100 to 100 (a percentage)")
             return
-        schedule_rule_id = pluginAction.props["scheduleId"]
-        dev_dict = self._get_device_dict(dev.states["id"])
-        if dev_dict:
-            schedule_id_dict = {rule_dict["id"]: rule_dict["name"] for rule_dict in dev_dict["scheduleRules"]}
-            if schedule_rule_id in schedule_id_dict.keys():
-                try:
-                    data = {
-                        "id": schedule_rule_id,
-                        "adjustment": int(pluginAction.props["adjustment"]) * .01
-                    }
-                    self._make_api_call(SCHEDULERULE_START_URL, request_method="put", data=data)
-                    self.logger.info("Rachio seasonal adjustment set to {}%".format(pluginAction.props["adjustment"]))
-                    return
-                except Exception as exc:
-                    pass
-        self.logger.error("No Rachio schedule found matching action configuration - check your action.")
+        if self.throttle_next_call:
+            self.logger.error("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
+                    self.throttle_next_call)
+            )
+            self._fireTrigger("setSeasonalAdjustmentFailed", dev.id)
+        else:
+            schedule_rule_id = pluginAction.props["scheduleId"]
+            dev_dict = self._get_device_dict(dev.states["id"])
+            if dev_dict:
+                schedule_id_dict = {rule_dict["id"]: rule_dict["name"] for rule_dict in dev_dict["scheduleRules"]}
+                if schedule_rule_id in schedule_id_dict.keys():
+                    try:
+                        data = {
+                            "id": schedule_rule_id,
+                            "adjustment": int(pluginAction.props["adjustment"]) * .01
+                        }
+                        self._make_api_call(SCHEDULERULE_START_URL, request_method="put", data=data)
+                        self.logger.info("Rachio seasonal adjustment set to {}%".format(pluginAction.props["adjustment"]))
+                        return
+                    except Exception as exc:
+                        self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                        self._fireTrigger("setSeasonalAdjustmentFailed", dev.id)
+            self.logger.error("No Rachio schedule found matching action configuration - check your action.")
 
     ########################################
     def setStandbyMode(self, pluginAction, dev):
@@ -571,6 +787,8 @@ class Plugin(indigo.PluginBase):
             self.logger.info("Standby mode for controller '{}' turned {}".format(dev.name, "on" if pluginAction.props["mode"] else "off"))
         except Exception as exc:
             self.logger.error("Could not set standby mode - check your controller.")
+            self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+            self._fireTrigger("setStandbyFailed", dev.id)
 
     ########################################
     # Menu callbacks defined in MenuItems.xml
@@ -584,6 +802,7 @@ class Plugin(indigo.PluginBase):
             self.pluginPrefs["showDebugInfo"] = True
         self.debug = not self.debug
 
+    ########################################
     def updateAllStatus(self):
         self._next_weather_update = datetime.now()
         self._update_from_rachio()

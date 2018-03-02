@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<Events>
+	<Event id="sprinklerError">
+		<Name>Sprinkler Operational Errors</Name>
+		<ConfigUI>
+            <Field type="menu" id="id" defaultValue="">
+                <Label>Sprinkler Controller:</Label>
+                <List class="self" method="sprinklerList"/>
+            </Field>
+			<Field id="errorType" type="menu" defaultValue="all">
+				<Label>Errors to monitor for:</Label>
+				<List>
+					<Option value="all">All Operational Errors</Option>
+					<Option value="startStartZoneFailed">Zone Change Failed (start or stop)</Option>
+					<Option value="stopFailed">Stop Sprinkler Failed</Option>
+					<Option value="startRachioScheduleFailed">Start Rachio Schedule Failed</Option>
+					<Option value="setSeasonalAdjustmentFailed">Set Seasonal Adjustment Failed</Option>
+					<Option value="setStandbyFailed">Set Standby Mode Failed</Option>
+				</List>
+			</Field>
+		</ConfigUI>
+	</Event>
+	<Event id="commError">
+		<Name>API Communication Errors</Name>
+		<ConfigUI>
+			<Field id="errorType" type="menu" defaultValue="allCommErrors">
+				<Label>Errors to monitor for:</Label>
+				<List>
+					<Option value="allCommErrors">All Communication Errors</Option>
+					<Option value="rateLimitExceeded">API Rate Limit Exceeded</Option>
+				</List>
+			</Field>
+		</ConfigUI>
+	</Event>
+	<Event id="updateAvailable">
+		<Name>Plugin Update Available</Name>
+	</Event>
+</Events>
