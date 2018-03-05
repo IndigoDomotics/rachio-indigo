@@ -17,6 +17,7 @@ from operator import itemgetter
 from datetime import datetime, timedelta, time
 from dateutil import tz
 from distutils.version import LooseVersion
+import random
 
 RACHIO_API_VERSION              = "1"
 RACHIO_MAX_ZONE_DURATION        = 10800
@@ -41,6 +42,7 @@ SCHEDULERULE_URL                = API_URL + "schedulerule/{scheduleRuleId}"
 SCHEDULERULE_START_URL          = SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION, scheduleRuleId="start")
 SCHEDULERULE_SEASONAL_ADJ_URL   = SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION, scheduleRuleId="seasonal_adjustment")
 
+FORECAST_DAYS_SUPPORTED = 14
 FORECAST_FIELDS_USED = {
     "calculatedPrecip": "decimalPlaces:2",
     "cloudCover": "percentage",
@@ -109,14 +111,14 @@ class Plugin(indigo.PluginBase):
         self._next_weather_update = datetime.now()
         self.throttle_next_call = None
         self.version_check_email = pluginPrefs.get("versionCheckEmail", None)
-        # Check for updates at 8pm local time every day. Not that it matters that much, but seems like it's about the
-        # best time in general.
+        # Check for updates between 8pm and 9pm local time every day. Not that it matters that much, but seems like it's
+        # about the best time in general.
         now = datetime.now()
         target_date = now.date()
-        target_time = time(20)
+        target_time = time(20, random.randint(0,59))
         if target_time < now.time():
             target_date = (now + timedelta(days=1)).date()
-        self.next_version_check = datetime(target_date.year, target_date.month, target_date.day, 20)
+        self.next_version_check = datetime(target_date.year, target_date.month, target_date.day, target_time.hour, target_time.minute)
 
     ########################################
     # Internal helper methods
@@ -213,7 +215,7 @@ class Plugin(indigo.PluginBase):
                 self._displayed_connection_error = True
             raise exc
         except requests.exceptions.HTTPError as exc:
-            if exc.response.status == 429:
+            if exc.response.status_code == 429:
                 # We've hit the throttle limit - we need to back off on all requests for some period of time
                 self.throttle_next_call = datetime.now()+timedelta(minutes=THROTTLE_LIMIT_TIMER)
                 self._fireTrigger("rateLimitExceeded")
@@ -295,17 +297,36 @@ class Plugin(indigo.PluginBase):
                             if dev_dict["scheduleModeType"] != dev.states["scheduleModeType"]:
                                 update_list.append({"key": "scheduleModeType", "value": dev_dict["scheduleModeType"]})
                             # Update location-based stuff
-                            if dev_dict["elevation"] != dev.states["elevation"]:
-                                update_list.append({"key": "elevation", "value": dev_dict["elevation"]})
-                            if dev_dict["latitude"] != dev.states["latitude"]:
-                                update_list.append({"key": "latitude", "value": dev_dict["latitude"]})
-                            if dev_dict["longitude"] != dev.states["longitude"]:
-                                update_list.append({"key": "latitude", "value": dev_dict["latitude"]})
-                            if dev_dict["timeZone"] != dev.states["timeZone"]:
-                                update_list.append({"key": "timeZone", "value": dev_dict["timeZone"]})
-                            if dev_dict["utcOffset"] != dev.states["utcOffset"]:
-                                update_list.append({"key": "utcOffset", "value": dev_dict["utcOffset"]})
-
+                            try:
+                                if dev_dict["elevation"] != dev.states["elevation"]:
+                                    update_list.append({"key": "elevation", "value": dev_dict["elevation"]})
+                            except:
+                                self.logger.debug(u"The 'elevation' field wasn't returned by the API.")
+                                update_list.append({"key": "elevation", "value": "unavailable from API"})
+                            try:
+                                if dev_dict["latitude"] != dev.states["latitude"]:
+                                    update_list.append({"key": "latitude", "value": dev_dict["latitude"]})
+                            except:
+                                self.logger.debug(u"The 'latitude' field wasn't returned by the API.")
+                                update_list.append({"key": "latitude", "value": "unavailable from API"})
+                            try:
+                                if dev_dict["longitude"] != dev.states["longitude"]:
+                                    update_list.append({"key": "longitude", "value": dev_dict["longitude"]})
+                            except:
+                                self.logger.debug(u"The 'longitude' field wasn't returned by the API.")
+                                update_list.append({"key": "longitude", "value": "unavailable from API"})
+                            try:
+                                if dev_dict["timeZone"] != dev.states["timeZone"]:
+                                    update_list.append({"key": "timeZone", "value": dev_dict["timeZone"]})
+                            except:
+                                self.logger.debug(u"The 'timeZone' field wasn't returned by the API.")
+                                update_list.append({"key": "timeZone", "value": "unavailable from API"})
+                            try:
+                                if dev_dict["utcOffset"] != dev.states["utcOffset"]:
+                                    update_list.append({"key": "utcOffset", "value": dev_dict["utcOffset"]})
+                            except:
+                                self.logger.debug(u"The 'utcOffset' field wasn't returned by the API.")
+                                update_list.append({"key": "utcOffset", "value": "unavailable from API"})
                             activeScheduleName = None
                             # Get the current schedule for the device - it will tell us if it's running or not
                             try:
@@ -385,20 +406,22 @@ class Plugin(indigo.PluginBase):
                             pass
                 forecasts_sorted = sorted(reply_dict["forecast"], key=itemgetter("time"))
                 for count, forecast in enumerate(forecasts_sorted):
-                    for k, v in forecast.iteritems():
-                        # For some strange reason, the API started returning currentTemperature for forecast days, which
-                        # makes no sense because it's a FORECAST (nothing current about it). So, we'll just ignore it.
-                        if k in FORECAST_FIELDS_USED and k != "currentTemperature":
-                            update_dict = {"key": "t{}forecast_{}".format(count, k), "value": v}
-                            if "decimalPlaces" in FORECAST_FIELDS_USED[k]:
-                                update_dict["decimalPlaces"]= FORECAST_FIELDS_USED[k].split(":")[1]
-                            elif "percentage" in FORECAST_FIELDS_USED[k]:
-                                update_dict["value"] = v * 100
-                                update_dict["decimalPlaces"] = 0
-                                update_dict["uiValue"] = u"{}%".format(update_dict["value"])
-                            if "temperature" in k or "dewPoint" in k:
-                                update_dict["uiValue"] = u"{} °{}".format(update_dict["value"], u"F" if units == "US" else u"C")
-                            state_update_list.append(update_dict)
+                    # We currently only support forecasts for 14 days including today, ignore more
+                    if count < FORECAST_DAYS_SUPPORTED:
+                        for k, v in forecast.iteritems():
+                            # For some strange reason, the API started returning currentTemperature for forecast days, which
+                            # makes no sense because it's a FORECAST (nothing current about it). So, we'll just ignore it.
+                            if k in FORECAST_FIELDS_USED and k != "currentTemperature":
+                                update_dict = {"key": "t{}forecast_{}".format(count, k), "value": v}
+                                if "decimalPlaces" in FORECAST_FIELDS_USED[k]:
+                                    update_dict["decimalPlaces"]= FORECAST_FIELDS_USED[k].split(":")[1]
+                                elif "percentage" in FORECAST_FIELDS_USED[k]:
+                                    update_dict["value"] = v * 100
+                                    update_dict["decimalPlaces"] = 0
+                                    update_dict["uiValue"] = u"{}%".format(update_dict["value"])
+                                if "temperature" in k or "dewPoint" in k:
+                                    update_dict["uiValue"] = u"{} °{}".format(update_dict["value"], u"F" if units == "US" else u"C")
+                                state_update_list.append(update_dict)
                 dev.updateStatesOnServer(state_update_list)
                 self._next_weather_update = datetime.now() + timedelta(seconds=DEFAULT_WEATHER_UPDATE_INTERVAL)
             except Exception as exc:
