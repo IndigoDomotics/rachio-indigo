@@ -5,7 +5,7 @@ as standard [Indigo sprinkler devices](http://www.indigodomo.com/docs/overview#s
 Any Rachio device that is supported by [v1 of their API](https://rachio.readme.io/v1.0/docs)
 should work.
 
-Check out the [full documentation](https://github.com/IndigoDomotics/rachi-indigo/wiki)
+Check out the [full documentation](https://github.com/IndigoDomotics/rachio-indigo/wiki)
 for a complete description of how to use the plugin. You can always get
 the latest release directly from the [Indigo Plugin Store](http://www.indigodomo.com/pluginstore/12/)
 or from the [Indigo Plugin Store](http://www.indigodomo.com/pluginstore/).
