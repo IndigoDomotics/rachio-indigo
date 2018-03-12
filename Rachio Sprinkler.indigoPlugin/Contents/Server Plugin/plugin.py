@@ -546,16 +546,16 @@ class Plugin(indigo.PluginBase):
                 update_list.append({"key": "address", "value": dev_dict["macAddress"]})
                 update_list.append({"key": "model", "value": dev_dict["model"]})
                 update_list.append({"key": "serialNumber", "value": dev_dict["serialNumber"]})
-                update_list.append({"key": "elevation", "value": dev_dict["elevation"]})
-                update_list.append({"key": "latitude", "value": dev_dict["latitude"]})
-                update_list.append({"key": "longitude", "value": dev_dict["longitude"]})
+                update_list.append({"key": "elevation", "value": dev_dict.get("elevation", "unavailable from API")})
+                update_list.append({"key": "latitude", "value": dev_dict.get("latitude", "unavailable from API")})
+                update_list.append({"key": "longitude", "value": dev_dict.get("longitude", "unavailable from API")})
                 update_list.append({"key": "name", "value": dev_dict["name"]})
                 update_list.append({"key": "inStandbyMode", "value": not dev_dict["on"]})
                 update_list.append({"key": "paused", "value": dev_dict["paused"]})
                 update_list.append({"key": "scheduleModeType", "value": dev_dict["scheduleModeType"]})
                 update_list.append({"key": "status", "value": dev_dict["status"]})
-                update_list.append({"key": "timeZone", "value": dev_dict["timeZone"]})
-                update_list.append({"key": "utcOffset", "value": dev_dict["utcOffset"]})
+                update_list.append({"key": "timeZone", "value": dev_dict.get("timeZone", "unavailable from API")})
+                update_list.append({"key": "utcOffset", "value": dev_dict.get("utcOffset", "unavailable from API")})
                 # Get the current schedule for the device - it will tell us if it's running or not
                 activeScheduleName = None
                 try:
