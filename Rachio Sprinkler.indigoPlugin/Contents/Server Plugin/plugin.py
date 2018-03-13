@@ -84,6 +84,13 @@ def convert_timestamp(timestamp):
     time_utc_gmt = time_utc.replace(tzinfo=from_zone)
     return time_utc_gmt.astimezone(to_zone)
 
+def get_key_from_dict(key, dict):
+    try:
+        return dict[key]
+    except KeyError:
+        return "unavailable from API"
+    except:
+        return "unknown error"
 
 ################################################################################
 class Plugin(indigo.PluginBase):
@@ -98,6 +105,7 @@ class Plugin(indigo.PluginBase):
         # Not currently exposed in the plugin prefs, but we can if necessary
         self.timeout = int(pluginPrefs.get("apiTimeout", DEFAULT_API_CALL_TIMEOUT))
 
+        self.unused_devices = {}
         self.access_token = pluginPrefs.get("accessToken", None)
         self.person_id = pluginPrefs.get("personId", None)
         if self.access_token:
@@ -296,6 +304,7 @@ class Plugin(indigo.PluginBase):
                                 update_list.append({"key": "name", "value": dev_dict["name"]})
                             if dev_dict["scheduleModeType"] != dev.states["scheduleModeType"]:
                                 update_list.append({"key": "scheduleModeType", "value": dev_dict["scheduleModeType"]})
+                            update_list.append({"key": "paused", "value": get_key_from_dict("paused", dev_dict)})
                             # Update location-based stuff
                             try:
                                 if dev_dict["elevation"] != dev.states["elevation"]:
@@ -543,19 +552,19 @@ class Plugin(indigo.PluginBase):
                 # Update all the states here
                 update_list = []
                 update_list.append({"key": "id", "value": dev_dict["id"]})
-                update_list.append({"key": "address", "value": dev_dict["macAddress"]})
-                update_list.append({"key": "model", "value": dev_dict["model"]})
-                update_list.append({"key": "serialNumber", "value": dev_dict["serialNumber"]})
-                update_list.append({"key": "elevation", "value": dev_dict.get("elevation", "unavailable from API")})
-                update_list.append({"key": "latitude", "value": dev_dict.get("latitude", "unavailable from API")})
-                update_list.append({"key": "longitude", "value": dev_dict.get("longitude", "unavailable from API")})
-                update_list.append({"key": "name", "value": dev_dict["name"]})
-                update_list.append({"key": "inStandbyMode", "value": not dev_dict["on"]})
-                update_list.append({"key": "paused", "value": dev_dict["paused"]})
-                update_list.append({"key": "scheduleModeType", "value": dev_dict["scheduleModeType"]})
-                update_list.append({"key": "status", "value": dev_dict["status"]})
-                update_list.append({"key": "timeZone", "value": dev_dict.get("timeZone", "unavailable from API")})
-                update_list.append({"key": "utcOffset", "value": dev_dict.get("utcOffset", "unavailable from API")})
+                update_list.append({"key": "address", "value": get_key_from_dict("macAddress", dev_dict)})
+                update_list.append({"key": "model", "value": get_key_from_dict("model", dev_dict)})
+                update_list.append({"key": "serialNumber", "value": get_key_from_dict("serialNumber", dev_dict)})
+                update_list.append({"key": "elevation", "value": get_key_from_dict("elevation", dev_dict)})
+                update_list.append({"key": "latitude", "value": get_key_from_dict("latitude", dev_dict)})
+                update_list.append({"key": "longitude", "value": get_key_from_dict("longitude", dev_dict)})
+                update_list.append({"key": "name", "value": get_key_from_dict("name", dev_dict)})
+                update_list.append({"key": "inStandbyMode", "value": not dev_dict["on"] if "on" in dev_dict else "unavailable from API"})
+                update_list.append({"key": "paused", "value": get_key_from_dict("paused", dev_dict)})
+                update_list.append({"key": "scheduleModeType", "value": get_key_from_dict("scheduleModeType", dev_dict)})
+                update_list.append({"key": "status", "value": get_key_from_dict("status", dev_dict)})
+                update_list.append({"key": "timeZone", "value": get_key_from_dict("timeZone", dev_dict)})
+                update_list.append({"key": "utcOffset", "value": get_key_from_dict("utcOffset", dev_dict)})
                 # Get the current schedule for the device - it will tell us if it's running or not
                 activeScheduleName = None
                 try:
