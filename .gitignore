@@ -97,3 +97,9 @@ ENV/
 
 # PyCharm/IntelliJ settings
 .idea
+/Gen2 Person Info.json
+/webhook events
+/Webhook types and sample JSON.webloc
+/Webhook.site.webloc
+/.gitignore
+/device dump

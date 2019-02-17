@@ -110,6 +110,7 @@ class Plugin(indigo.PluginBase):
         self.person_id = pluginPrefs.get("personId", None)
         if self.access_token:
             self.headers = {
+                "Content-Type": "application/json",
                 "Authorization": "Bearer {}".format(self.access_token)
             }
         else:
@@ -442,7 +443,18 @@ class Plugin(indigo.PluginBase):
     # startup, concurrent thread, and shutdown methods
     ########################################
     def startup(self):
-        pass
+    
+        # set up for webhooks from the HTTPd plugin
+
+        httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd")
+        if not httpd_plugin.isEnabled:
+            return
+
+        self.webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props={u"name": self.pluginId}, waitUntilDone=True)
+        if not self.webhook_info:
+            return
+        
+        indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.httpd", self.webhook_info["hook_name"], "webHook_handler")
 
     ########################################
     def shutdown(self):
@@ -465,6 +477,13 @@ class Plugin(indigo.PluginBase):
                 self.sleep(self.pollingInterval*60)
         except self.StopThread:
             self.logger.debug("Received StopThread")
+
+
+    def webHook_handler(self, hookData):
+        self.logger.debug(u"webHook_handler - hookData: {}".format(hookData))
+        payload = hookData["payload"]
+        self.logger.info(u"webHook received, {}/{}/{}: {}".format(payload["category"], payload["type"], payload["subType"], payload.get("description", "")))
+
 
     ########################################
     # Dialog list callbacks
@@ -615,9 +634,45 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.error("Rachio device '{}' configured with unknown ID. Reconfigure the device to make it active.".format(dev.name))
 
+        # set up webhooks for this device
+        
+        webhook_url = self.webhook_info.get("http", None)
+        if not webhook_url:
+            return
+        
+        self.logger.debug("webhook_url = {}".format(webhook_url))
+        url = (API_URL + "notification/webhook_event_type").format(apiVersion=RACHIO_API_VERSION)
+        reply = self._make_api_call(url)
+        for r in reply:
+            url = (API_URL + "notification/webhook").format(apiVersion=RACHIO_API_VERSION)
+            data = {
+                "device" : {"id": dev.pluginProps["id"]},
+                "externalId" : dev.id,
+                "url" : webhook_url,
+                "eventTypes":[{"id": r[u'id']}]            
+            }
+            try:
+                self._make_api_call(url, request_method="post", data=data)            
+                self.logger.debug("subscribed to webhook: {} ({})".format(r[u'name'], r[u'id']))
+            except:
+                self.logger.debug("subscription failure for webhook: {} ({})".format(r[u'name'], r[u'id']))
+                
     ########################################
     def deviceStopComm(self, dev):
-        pass
+
+        # remove webhooks
+
+        url = (API_URL + "notification/{devId}/webhook").format(apiVersion=RACHIO_API_VERSION, devId=dev.pluginProps["id"])
+        reply = self._make_api_call(url)
+        for r in reply:
+            url = (API_URL + "notification/webhook/{whid}").format(apiVersion=RACHIO_API_VERSION, whid=r["id"])
+            try:
+                self._make_api_call(url, request_method="delete")            
+                self.logger.debug("unsubscribed from webhook: {} ({})".format(r["eventTypes"][0][u'name'], r[u'id']))
+            except:
+                self.logger.debug("unsubscribe failure for webhook: {} ({})".format(r["eventTypes"][0][u'name'], r[u'id']))
+
+
 
     ########################################
     # Event callbacks
