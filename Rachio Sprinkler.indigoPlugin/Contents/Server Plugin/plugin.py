@@ -25,6 +25,7 @@ DEFAULT_API_CALL_TIMEOUT        = 5      # number of seconds after which we time
 MINIMUM_POLLING_INTERVAL        = 3      # number of minutes between each poll, default is 3 (changed 2/27/2018 to help avoid throttling)
 DEFAULT_WEATHER_UPDATE_INTERVAL = 10     # number of minutes between each forecast update, default is 10
 THROTTLE_LIMIT_TIMER            = 61     # number of minutes to wait if we've received a throttle error before doing any API calls
+FORECAST_UPDATE_INTERVAL        = 60     # minutes between forecast updates
 
 API_URL                         = "https://api.rach.io/{apiVersion}/public/"
 PERSON_URL                      = API_URL + "person/{personId}"
@@ -119,65 +120,11 @@ class Plugin(indigo.PluginBase):
         self.triggerDict = {}
         self._next_weather_update = datetime.now()
         self.throttle_next_call = None
-        self.version_check_email = pluginPrefs.get("versionCheckEmail", None)
-        # Check for updates between 8pm and 9pm local time every day. Not that it matters that much, but seems like it's
-        # about the best time in general.
-        now = datetime.now()
-        target_date = now.date()
-        target_time = time(20, random.randint(0,59))
-        if target_time < now.time():
-            target_date = (now + timedelta(days=1)).date()
-        self.next_version_check = datetime(target_date.year, target_date.month, target_date.day, target_time.hour, target_time.minute)
 
     ########################################
     # Internal helper methods
     ########################################
-    def _version_check(self, pluginId=None):
-        if not pluginId:
-            pluginId = self.pluginId
-        # Create some URLs we'll use later on
-        current_version_url = "https://api.indigodomo.com/api/v2/pluginstore/plugin-version-info.json?pluginId={}".format(
-            pluginId
-        )
-        store_detail_url = "https://www.indigodomo.com/pluginstore/{}/"
-        try:
-            # GET the url from the servers with a short timeout (avoids hanging the plugin)
-            reply = requests.get(current_version_url, timeout=5)
-            # This will raise an exception if the server returned an error
-            reply.raise_for_status()
-            # We now have a good reply so we get the json
-            reply_dict = reply.json()
-            plugin_dict = reply_dict["plugins"][0]
-            # Make sure that the 'latestRelease' element is a dict (could be a string for built-in plugins).
-            latest_release = plugin_dict["latestRelease"]
-            if isinstance(latest_release, dict):
-                # Compare the current version with the one returned in the reply dict
-                if LooseVersion(latest_release["number"]) > LooseVersion(self.pluginVersion):
-                    # The release in the store is newer than the current version.
-                    # We'll do a couple of things: first, we'll just log it
-                    self.logger.info(
-                        "A new version of the plugin (v{}) is available at: {}".format(
-                            latest_release["number"],
-                            store_detail_url.format(plugin_dict["id"])
-                        )
-                    )
-                    # We'll change the value of a variable named "Plugin_Name_Current_Version" to the new version number
-                    # which the user can then build a trigger on (or whatever).
-                    try:
-                        variable_name = u"{}_Available_Version".format(self.pluginDisplayName.replace(" ", "_"))
-                        indigo.variable.updateValue(variable_name, latest_release["number"])
-                    except:
-                        # The variable probably doesn't exist - we don't care so just skip it
-                        pass
-                    # Fire the version update event so users can trigger from it and do whatever they want.
-                    self._fireTrigger("updateAvailable")
-                else:
-                    self.logger.info(u"No plugin updates available.")
-        except Exception as exc:
-            self.logger.error(unicode(exc))
-        self.next_version_check = datetime.now() + timedelta(days=1)
 
-    ########################################
     def _make_api_call(self, url, request_method="get", data=None):
         try:
             if self.throttle_next_call:
@@ -278,18 +225,24 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
                     self._fireTrigger("personInfoCall")
                     return
+
                 current_device_uuids = [s.states["id"] for s in indigo.devices.iter(filter="self.sprinkler")]
                 self.unused_devices = {dev_dict["id"]: dev_dict for dev_dict in self.person["devices"] if dev_dict["id"] not in current_device_uuids}
                 self.defined_devices = {dev_dict["id"]: dev_dict for dev_dict in self.person["devices"] if dev_dict["id"] in current_device_uuids}
                 defined_devices = [dev_dict for dev_dict in self.person["devices"] if dev_dict["id"] in current_device_uuids]
+
                 for dev in [s for s in indigo.devices.iter(filter="self.sprinkler") if s.enabled]:
+                
                     for dev_dict in defined_devices:
+                    
                         # Find the matching update dict for the device
                         if dev_dict["id"] == dev.states["id"]:
                             # Update any changed information for the device - we only look at the data that may change
                             # as part of operation - anything that's fixed (serial number, etc. gets set once when the
                             # device is created or when the user replaces the controller.
                             update_list = []
+                            
+                            
                             # "status" is ONLINE or OFFLINE - if the latter it's unplugged or otherwise can't communicate with the cloud
                             # note: it often takes a REALLY long time for the API to return OFFLINE and sometimes it never does.
                             if dev_dict["status"] != dev.states["status"]:
@@ -298,6 +251,8 @@ class Plugin(indigo.PluginBase):
                                     dev.setErrorStateOnServer('unavailable')
                                 else:
                                     dev.setErrorStateOnServer('')
+                                    
+                                    
                             # "on" is False if the controller is in Standby Mode - note: it will still react to commands
                             if not dev_dict["on"] != dev.states["inStandbyMode"]:
                                 update_list.append({"key": "inStandbyMode", 'value': not dev_dict["on"]})
@@ -306,13 +261,9 @@ class Plugin(indigo.PluginBase):
                             if dev_dict["scheduleModeType"] != dev.states["scheduleModeType"]:
                                 update_list.append({"key": "scheduleModeType", "value": dev_dict["scheduleModeType"]})
                             update_list.append({"key": "paused", "value": get_key_from_dict("paused", dev_dict)})
+                            
+                            
                             # Update location-based stuff
-                            try:
-                                if dev_dict["elevation"] != dev.states["elevation"]:
-                                    update_list.append({"key": "elevation", "value": dev_dict["elevation"]})
-                            except:
-                                self.logger.debug(u"The 'elevation' field wasn't returned by the API.")
-                                update_list.append({"key": "elevation", "value": "unavailable from API"})
                             try:
                                 if dev_dict["latitude"] != dev.states["latitude"]:
                                     update_list.append({"key": "latitude", "value": dev_dict["latitude"]})
@@ -337,6 +288,8 @@ class Plugin(indigo.PluginBase):
                             except:
                                 self.logger.debug(u"The 'utcOffset' field wasn't returned by the API.")
                                 update_list.append({"key": "utcOffset", "value": "unavailable from API"})
+                                
+                                
                             activeScheduleName = None
                             # Get the current schedule for the device - it will tell us if it's running or not
                             try:
@@ -361,9 +314,11 @@ class Plugin(indigo.PluginBase):
                                 update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
                                 self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
                                 self._fireTrigger("getScheduleCall")
+                                
                             # Send the state updates to the server
                             if len(update_list):
                                 dev.updateStatesOnServer(update_list)
+                                
                             # Update zone information as necessary - these are properties, not states.
                             zoneNames = ""
                             maxZoneDurations = ""
@@ -380,7 +335,11 @@ class Plugin(indigo.PluginBase):
                             if activeScheduleName:
                                 props["ScheduledZoneDurations"] = activeScheduleName
                             dev.replacePluginPropsOnServer(props)
+                    
+                    # Update the forecasts
+                    
                     self._update_forecast_data(dev)
+            
             else:
                 self.logger.warn("You must specify your API token in the plugin's config before the plugin can be used.")
         except Exception as exc:
@@ -391,13 +350,7 @@ class Plugin(indigo.PluginBase):
         if datetime.now() >= self._next_weather_update:
             try:
                 units = dev.pluginProps["units"]
-                reply_dict = self._make_api_call(
-                    DEVICE_GET_FORECAST_URL.format(
-                        apiVersion=RACHIO_API_VERSION,
-                        deviceId=dev.states["id"],
-                        units=units
-                    )
-                )
+                reply_dict = self._make_api_call(DEVICE_GET_FORECAST_URL.format(apiVersion=RACHIO_API_VERSION, deviceId=dev.states["id"], units=units))
                 current_conditions = reply_dict["current"]
                 state_update_list = []
                 for k, v in current_conditions.iteritems():
@@ -444,7 +397,9 @@ class Plugin(indigo.PluginBase):
     ########################################
     def startup(self):
     
-        # set up for webhooks from the HTTPd plugin
+        self.use_webhook = False
+        
+        # set up for webhooks with the HTTPd plugin
 
         httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd")
         if not httpd_plugin.isEnabled:
@@ -453,7 +408,8 @@ class Plugin(indigo.PluginBase):
         self.webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props={u"name": self.pluginId}, waitUntilDone=True)
         if not self.webhook_info:
             return
-        
+
+        self.use_webhook = True        
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.httpd", self.webhook_info["hook_name"], "webHook_handler")
 
     ########################################
@@ -464,25 +420,79 @@ class Plugin(indigo.PluginBase):
     def runConcurrentThread(self):
         self.logger.debug("Starting concurrent tread")
         try:
-            # Polling - if we ever implement a webhook catcher from the Rachio API we would no longer need to poll.
-            # But since that would currently require an IWS handler and some way to communicate between the two we'll
-            # save that for later when the two APIs are integrated.
+            # We only need to poll for forecast data, if webhooks are enabled
+            
             while True:
-                if self.next_version_check < datetime.now():
-                    self._version_check()
                 try:
                     self._update_from_rachio()
                 except:
                     pass
                 self.sleep(self.pollingInterval*60)
+
         except self.StopThread:
             self.logger.debug("Received StopThread")
 
+    ########################################
 
     def webHook_handler(self, hookData):
-        self.logger.debug(u"webHook_handler - hookData: {}".format(hookData))
         payload = hookData["payload"]
-        self.logger.info(u"webHook received, {}/{}/{}: {}".format(payload["category"], payload["type"], payload["subType"], payload.get("description", "")))
+        self.logger.info(u"webHook received, {}/{}/{}/{}: {}".format(payload["category"], payload["type"], payload["subType"], payload["eventType"], payload.get("description", "")))
+        self.logger.debug(u"webHook_handler - payload: {}".format(payload))
+
+        if payload["eventType"] == 'DEVICE_ZONE_RUN_STARTED_EVENT':
+        
+            for dev in [s for s in indigo.devices.iter(filter="self.sprinkler") if s.enabled]:
+                if payload["deviceId"] == dev.states["id"]:
+                    self.logger.debug("webHook_handler updating {}".format(dev.name))
+
+
+                            activeScheduleName = None
+                            # Get the current schedule for the device - it will tell us if it's running or not
+                            try:
+                                current_schedule_dict = self._make_api_call(DEVICE_CURRENT_SCHEDULE_URL.format(apiVersion=RACHIO_API_VERSION, deviceId=dev.states["id"]))
+                                if len(current_schedule_dict):
+                                    # Something is running, so we need to figure out if it's a manual or automatic schedule and
+                                    # if it's automatic (a Rachio schedule) then we need to get the name of that schedule
+                                    update_list.append({"key": "activeZone", "value": current_schedule_dict["zoneNumber"]})
+                                    if current_schedule_dict["type"] == "AUTOMATIC":
+                                        schedule_detail_dict = self._make_api_call(SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION, scheduleRuleId=current_schedule_dict["scheduleRuleId"]))
+                                        update_list.append({"key": "activeSchedule", "value": schedule_detail_dict["name"]})
+                                        activeScheduleName = schedule_detail_dict["name"]
+
+                                    else:
+                                        update_list.append({"key": "activeSchedule", "value": current_schedule_dict["type"].title()})
+                                        activeScheduleName = current_schedule_dict["type"].title()
+                                else:
+                                    update_list.append({"key": "activeSchedule", "value": "No active schedule"})
+                                    # Show no zones active
+                                    update_list.append({"key": "activeZone", "value": 0})
+                            except Exception as exc:
+                                update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
+                                self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                                self._fireTrigger("getScheduleCall")
+                                
+                            # Send the state updates to the server
+                            if len(update_list):
+                                dev.updateStatesOnServer(update_list)
+                                
+                            # Update zone information as necessary - these are properties, not states.
+                            zoneNames = ""
+                            maxZoneDurations = ""
+                            for zone in sorted(dev_dict["zones"], key=itemgetter('zoneNumber')):
+                                zoneNames += ", {}".format(zone["name"]) if len(zoneNames) else zone["name"]
+                                if len(maxZoneDurations):
+                                    maxZoneDurations += ", {}".format(zone["maxRuntime"]) if zone["enabled"] else ", 0"
+                                else:
+                                    maxZoneDurations = "{}".format(zone["maxRuntime"]) if zone["enabled"] else "0"
+                            props = copy.deepcopy(dev.pluginProps)
+                            props["NumZones"] = len(dev_dict["zones"])
+                            props["ZoneNames"] = zoneNames
+                            props["MaxZoneDurations"] = maxZoneDurations
+                            if activeScheduleName:
+                                props["ScheduledZoneDurations"] = activeScheduleName
+                            dev.replacePluginPropsOnServer(props)
+                    
+
 
 
     ########################################
@@ -574,7 +584,6 @@ class Plugin(indigo.PluginBase):
                 update_list.append({"key": "address", "value": get_key_from_dict("macAddress", dev_dict)})
                 update_list.append({"key": "model", "value": get_key_from_dict("model", dev_dict)})
                 update_list.append({"key": "serialNumber", "value": get_key_from_dict("serialNumber", dev_dict)})
-                update_list.append({"key": "elevation", "value": get_key_from_dict("elevation", dev_dict)})
                 update_list.append({"key": "latitude", "value": get_key_from_dict("latitude", dev_dict)})
                 update_list.append({"key": "longitude", "value": get_key_from_dict("longitude", dev_dict)})
                 update_list.append({"key": "name", "value": get_key_from_dict("name", dev_dict)})
@@ -636,11 +645,14 @@ class Plugin(indigo.PluginBase):
 
         # set up webhooks for this device
         
+        if not self.use_webhook:
+            return
+
         webhook_url = self.webhook_info.get("http", None)
         if not webhook_url:
+            self.use_webhook = False        
             return
         
-        self.logger.debug("webhook_url = {}".format(webhook_url))
         url = (API_URL + "notification/webhook_event_type").format(apiVersion=RACHIO_API_VERSION)
         reply = self._make_api_call(url)
         for r in reply:
