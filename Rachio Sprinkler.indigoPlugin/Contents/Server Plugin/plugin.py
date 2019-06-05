@@ -436,63 +436,27 @@ class Plugin(indigo.PluginBase):
 
     def webHook_handler(self, hookData):
         payload = hookData["payload"]
-        self.logger.info(u"webHook received, {}/{}/{}/{}: {}".format(payload["category"], payload["type"], payload["subType"], payload["eventType"], payload.get("description", "")))
+        self.logger.info(u"webHook received, {}/{}/{}/{}: {}".format(payload["category"], payload["type"], payload["subType"], payload["eventType"], payload.get("summary", "")))
         self.logger.debug(u"webHook_handler - payload: {}".format(payload))
 
-        if payload["eventType"] == 'DEVICE_ZONE_RUN_STARTED_EVENT':
+        # first, find the Indigo device for the Rachio Device
+        for dev in indigo.devices.iter(filter="self"):
+            if dev.pluginProps['id'] == payload['deviceId']:
+                break
+        else:
+            return  # no matching device, ignore
         
-            for dev in [s for s in indigo.devices.iter(filter="self.sprinkler") if s.enabled]:
-                if payload["deviceId"] == dev.states["id"]:
-                    self.logger.debug("webHook_handler updating {}".format(dev.name))
+        if payload["eventType"]   == 'DEVICE_ZONE_RUN_STARTED_EVENT':
+            dev.updateStateOnServer("activeZone", payload['zoneNumber'])
 
+        elif payload["eventType"] == 'DEVICE_ZONE_RUN_COMPLETED_EVENT':
+            dev.updateStateOnServer("activeZone", 0)
 
-                            activeScheduleName = None
-                            # Get the current schedule for the device - it will tell us if it's running or not
-                            try:
-                                current_schedule_dict = self._make_api_call(DEVICE_CURRENT_SCHEDULE_URL.format(apiVersion=RACHIO_API_VERSION, deviceId=dev.states["id"]))
-                                if len(current_schedule_dict):
-                                    # Something is running, so we need to figure out if it's a manual or automatic schedule and
-                                    # if it's automatic (a Rachio schedule) then we need to get the name of that schedule
-                                    update_list.append({"key": "activeZone", "value": current_schedule_dict["zoneNumber"]})
-                                    if current_schedule_dict["type"] == "AUTOMATIC":
-                                        schedule_detail_dict = self._make_api_call(SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION, scheduleRuleId=current_schedule_dict["scheduleRuleId"]))
-                                        update_list.append({"key": "activeSchedule", "value": schedule_detail_dict["name"]})
-                                        activeScheduleName = schedule_detail_dict["name"]
+        elif payload["eventType"] == 'SCHEDULE_STARTED_EVENT':
+            dev.updateStateOnServer("activeSchedule", payload['scheduleName'])
 
-                                    else:
-                                        update_list.append({"key": "activeSchedule", "value": current_schedule_dict["type"].title()})
-                                        activeScheduleName = current_schedule_dict["type"].title()
-                                else:
-                                    update_list.append({"key": "activeSchedule", "value": "No active schedule"})
-                                    # Show no zones active
-                                    update_list.append({"key": "activeZone", "value": 0})
-                            except Exception as exc:
-                                update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
-                                self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
-                                self._fireTrigger("getScheduleCall")
-                                
-                            # Send the state updates to the server
-                            if len(update_list):
-                                dev.updateStatesOnServer(update_list)
-                                
-                            # Update zone information as necessary - these are properties, not states.
-                            zoneNames = ""
-                            maxZoneDurations = ""
-                            for zone in sorted(dev_dict["zones"], key=itemgetter('zoneNumber')):
-                                zoneNames += ", {}".format(zone["name"]) if len(zoneNames) else zone["name"]
-                                if len(maxZoneDurations):
-                                    maxZoneDurations += ", {}".format(zone["maxRuntime"]) if zone["enabled"] else ", 0"
-                                else:
-                                    maxZoneDurations = "{}".format(zone["maxRuntime"]) if zone["enabled"] else "0"
-                            props = copy.deepcopy(dev.pluginProps)
-                            props["NumZones"] = len(dev_dict["zones"])
-                            props["ZoneNames"] = zoneNames
-                            props["MaxZoneDurations"] = maxZoneDurations
-                            if activeScheduleName:
-                                props["ScheduledZoneDurations"] = activeScheduleName
-                            dev.replacePluginPropsOnServer(props)
-                    
-
+        elif payload["eventType"] == 'SCHEDULE_COMPLETED_EVENT':
+            dev.updateStateOnServer("activeSchedule", "No active schedule")
 
 
     ########################################
