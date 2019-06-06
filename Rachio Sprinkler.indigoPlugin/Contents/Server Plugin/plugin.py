@@ -402,7 +402,7 @@ class Plugin(indigo.PluginBase):
         # set up for webhooks with the HTTPd plugin
 
         httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd")
-        if not httpd_plugin.isEnabled:
+        if not httpd_plugin.isEnabled():
             return
 
         self.webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props={u"name": self.pluginId}, waitUntilDone=True)
