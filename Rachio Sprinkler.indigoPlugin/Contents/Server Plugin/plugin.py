@@ -204,6 +204,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     def _update_from_rachio(self):
+        self.logger.debug("_update_from_rachio")
         try:
             if self.access_token:
                 if not self.person_id:
@@ -396,29 +397,38 @@ class Plugin(indigo.PluginBase):
     # startup, concurrent thread, and shutdown methods
     ########################################
     def startup(self):
+
+        self.logger.info("Rachio Sprinklers Started")
     
-        self.use_webhook = False
-        
-        # set up for webhooks with the HTTPd plugin
-
-        httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd")
+        self.use_webhooks = bool(self.pluginPrefs.get("useWebhooks", False))
+        if not self.use_webhooks:
+            return
+            
+        # set up for webhooks with the HTTPd 2 plugin
+        httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd2")
         if not httpd_plugin.isEnabled():
+            self.logger.debug("HTTPd 2 plugin not enabled, disabling webhooks")
+            self.use_webhooks = False        
             return
 
-        self.webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props={u"name": self.pluginId}, waitUntilDone=True)
+        props = {u"name": self.pluginId, u"server": self.pluginPrefs.get("httpServerID", None)}
+        self.webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props=props, waitUntilDone=True)            
         if not self.webhook_info:
+            self.logger.debug("HTTPd 2 plugin did not provide webhook info, disabling webhooks")
+            self.use_webhooks = False        
             return
 
-        self.use_webhook = True        
-        indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.httpd", self.webhook_info["hook_name"], "webHook_handler")
+        self.logger.debug("Using HTTPd 2 plugin, webhook_info: {}".format(self.webhook_info))
+        indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.httpd2", self.webhook_info["hook_name"], "webHook_handler")
 
     ########################################
     def shutdown(self):
+        self.logger.info("Rachio Sprinklers Stopped")
         pass
 
     ########################################
     def runConcurrentThread(self):
-        self.logger.debug("Starting concurrent tread")
+        self.logger.debug("Starting concurrent thread")
         try:
             # We only need to poll for forecast data, if webhooks are enabled
             
@@ -434,31 +444,50 @@ class Plugin(indigo.PluginBase):
 
     ########################################
 
-    def webHook_handler(self, hookData):
-        payload = hookData["payload"]
-        self.logger.info(u"webHook received, {}/{}/{}/{}: {}".format(payload["category"], payload["type"], payload["subType"], payload["eventType"], payload.get("summary", "")))
+    def webHook_handler(self, hookJSON):
+        hookData = json.loads(hookJSON)
+        payload = json.loads(hookData["payload"])
+
+        self.logger.info(u"webHook received, {}/{}/{}/{}: {}".format(payload.get("category", ""), payload.get("type", ""), payload.get("subType", ""), payload.get("eventType", ""), payload.get("summary", "")))
         self.logger.debug(u"webHook_handler - payload: {}".format(payload))
 
-        # first, find the Indigo device for the Rachio Device
+        # Find the Indigo device for the Rachio Device
         for dev in indigo.devices.iter(filter="self"):
             if dev.pluginProps['id'] == payload['deviceId']:
                 break
         else:
-            return  # no matching device, ignore
+            self.logger.debug("webHook_handler: No matching Indigo device for Rachio deviceId '{}'".format(payload['deviceId']))
+            return
         
-        if payload["eventType"]   == 'DEVICE_ZONE_RUN_STARTED_EVENT':
+        eventType = payload.get("eventType", "")
+        
+        if eventType == 'DEVICE_ZONE_RUN_STARTED_EVENT':
             dev.updateStateOnServer("activeZone", payload['zoneNumber'])
+            self.logger.info("{}: Zone '{}' Started".format(dev.name, payload['zoneName']))
 
-        elif payload["eventType"] == 'DEVICE_ZONE_RUN_COMPLETED_EVENT':
+        elif eventType == 'DEVICE_ZONE_RUN_STOPPED_EVENT':
             dev.updateStateOnServer("activeZone", 0)
+            self.logger.info("{}: Zone '{}' Stopped".format(dev.name, payload['zoneName']))
 
-        elif payload["eventType"] == 'SCHEDULE_STARTED_EVENT':
+        elif eventType == 'DEVICE_ZONE_RUN_COMPLETED_EVENT':
+            dev.updateStateOnServer("activeZone", 0)
+            self.logger.info("{}: Zone '{}' Completed".format(dev.name, payload['zoneName']))
+
+        elif eventType == 'SCHEDULE_STARTED_EVENT':
             dev.updateStateOnServer("activeSchedule", payload['scheduleName'])
+            self.logger.info("{}: Schedule '{}' Started".format(dev.name, payload['scheduleName']))
 
-        elif payload["eventType"] == 'SCHEDULE_COMPLETED_EVENT':
+        elif eventType == 'SCHEDULE_STOPPED_EVENT':
+            dev.updateStateOnServer("activeSchedule", payload['scheduleName'])
+            self.logger.info("{}: Schedule '{}' Stopped".format(dev.name, payload['scheduleName']))
+
+        elif eventType == 'SCHEDULE_COMPLETED_EVENT':
             dev.updateStateOnServer("activeSchedule", "No active schedule")
+            self.logger.info("{}: Schedule '{}' Completed".format(dev.name, payload['scheduleName']))
 
-
+        else:
+            self.logger.info("{}: Unknown eventType '{}'".format(dev.name, eventType))
+        
     ########################################
     # Dialog list callbacks
     ########################################
@@ -609,12 +638,12 @@ class Plugin(indigo.PluginBase):
 
         # set up webhooks for this device
         
-        if not self.use_webhook:
+        if not self.use_webhooks:
             return
 
-        webhook_url = self.webhook_info.get("http", None)
+        webhook_url = self.webhook_info.get("hook_url", None)
         if not webhook_url:
-            self.use_webhook = False        
+            self.use_webhooks = False        
             return
         
         url = (API_URL + "notification/webhook_event_type").format(apiVersion=RACHIO_API_VERSION)
@@ -869,3 +898,23 @@ class Plugin(indigo.PluginBase):
     def updateAllStatus(self):
         self._next_weather_update = datetime.now()
         self._update_from_rachio()
+
+    ########################################
+
+    def httpServerList(self, filter="", valuesDict=None, typeId="", targetId=0):
+
+        retList = []
+        for dev in indigo.devices.iter():
+            if dev.protocol == indigo.kProtocol.Plugin and dev.pluginId == "com.flyingdiver.indigoplugin.httpd2" and dev.deviceTypeId == 'serverDevice':
+                retList.append((dev.id, dev.name))
+        
+        retList.sort(key=lambda tup: tup[1])
+        self.logger.debug("httpServerList: {}".format(retList))
+        return retList
+
+
+
+    # doesn't do anything, just needed to force other menus to dynamically refresh
+    def configMenuChanged(self, valuesDict):
+        return valuesDict
+

@@ -18,4 +18,16 @@
 	<Field id="apiCallTimeoutLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true">
 		<Label>Number of seconds to wait for the API to reply before continuing. You probably don't need to adjust this unless instructed by support.</Label>
 	</Field>
+    <Field id="sep3" type="separator"/>
+    <Field id="useWebhooks" type="checkbox" defaultValue="false">
+        <Label>Use Rachio API Webhooks</Label>
+    </Field>
+    <Field id="useWebhooksNote" type="label" fontSize="small" fontColor="darkgray">
+        <Label>Requires HTTPd 2 plugin with port forwarding on router.</Label>
+    </Field>    
+    <Field id="httpServerID" type="menu" visibleBindingId="useWebhooks" visibleBindingValue="true"  alwaysUseInDialogHeightCalc="true">
+        <Label>HTTPd 2 Plugin Device:</Label>
+        <List method="httpServerList" dynamicReload="true" class="self" filter="" />
+        <CallbackMethod>configMenuChanged</CallbackMethod>
+    </Field>
 </PluginConfig>
