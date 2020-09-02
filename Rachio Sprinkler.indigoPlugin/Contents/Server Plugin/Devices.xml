@@ -43,11 +43,6 @@
                 <TriggerLabel>Active Rachio Schedule</TriggerLabel>
                 <ControlPageLabel>Active Rachio Schedule</ControlPageLabel>
             </State>
-            <State id="elevation">
-                <ValueType>Number</ValueType>
-                <TriggerLabel>Elevation</TriggerLabel>
-                <ControlPageLabel>Elevation</ControlPageLabel>
-            </State>
             <State id="latitude">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Latitude</TriggerLabel>
