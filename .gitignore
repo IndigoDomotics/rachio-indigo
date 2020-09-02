@@ -100,3 +100,4 @@ ENV/
 /webhook payloads
 /device dump
 /Gen2 Person Info.json
+/Rachio Sprinkler.indigoPlugin.zip
