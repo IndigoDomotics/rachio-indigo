@@ -4,6 +4,16 @@
 		<Name>Toggle Debugging</Name>
         <CallbackMethod>toggleDebugging</CallbackMethod>
 	</MenuItem>
+    <MenuItem id="toggleStandby">
+        <Name>Toggle Controller Standby Mode</Name>
+        <CallbackMethod>toggleStandbyMode</CallbackMethod>
+        <ConfigUI>
+            <Field id="targetDevice" type="menu">
+                <Label>Select Controller:</Label>
+                <List class="self" filter="" method="pickController" dynamicReload="true"/>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
 	<MenuItem id="updateAllStatus">
 		<Name>Update All Status</Name>
         <CallbackMethod>updateAllStatus</CallbackMethod>

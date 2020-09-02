@@ -100,15 +100,15 @@ class Plugin(indigo.PluginBase):
         super(Plugin, self).__init__(pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
         # Used to control when to show connection errors (vs just repeated retries)
         self._displayed_connection_error = False
+        
         self.debug = pluginPrefs.get("showDebugInfo", False)
-        # Not currently exposed in the plugin prefs, but we can if necessary
         self.pollingInterval = int(pluginPrefs.get("pollingInterval", MINIMUM_POLLING_INTERVAL))
-        # Not currently exposed in the plugin prefs, but we can if necessary
         self.timeout = int(pluginPrefs.get("apiTimeout", DEFAULT_API_CALL_TIMEOUT))
 
         self.unused_devices = {}
         self.access_token = pluginPrefs.get("accessToken", None)
         self.person_id = pluginPrefs.get("personId", None)
+        
         if self.access_token:
             self.headers = {
                 "Content-Type": "application/json",
@@ -894,6 +894,32 @@ class Plugin(indigo.PluginBase):
             self.pluginPrefs["showDebugInfo"] = True
         self.debug = not self.debug
 
+    
+    def toggleStandbyMode(self, valuesDict, typeId):
+        try:
+            deviceId = int(valuesDict["targetDevice"])
+            dev = indigo.devices[deviceId]
+        except:
+            self.logger.error(u"Bad Device specified for Toggle Standby Mode operation")
+            return False
+
+        try:
+            data = {
+                "id": dev.states["id"],
+            }
+            if dev.onState: 
+                url = DEVICE_TURN_OFF_URL.format(apiVersion=RACHIO_API_VERSION)
+            else:
+                url = DEVICE_TURN_ON_URL.format(apiVersion=RACHIO_API_VERSION)
+                
+            self._make_api_call(url, request_method="put", data=data)
+            self.logger.info("{}: Toggling standby mode".format(dev.name))
+        except Exception as exc:
+            self.logger.error("Could not set standby mode - check your controller.")
+            self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+            self._fireTrigger("setStandbyFailed", dev.id)
+            
+            
     ########################################
     def updateAllStatus(self):
         self._next_weather_update = datetime.now()
@@ -910,6 +936,13 @@ class Plugin(indigo.PluginBase):
         
         retList.sort(key=lambda tup: tup[1])
         self.logger.debug("httpServerList: {}".format(retList))
+        return retList
+
+    def pickController(self, filter=None, valuesDict=None, typeId=0):
+        retList = []
+        for dev in indigo.devices.iter("self.sprinkler"):
+            retList.append((dev.id, dev.name))
+        retList.sort(key=lambda tup: tup[1])
         return retList
 
 
