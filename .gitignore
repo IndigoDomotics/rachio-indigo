@@ -97,3 +97,6 @@ ENV/
 
 # PyCharm/IntelliJ settings
 .idea
+/webhook payloads
+/device dump
+/Gen2 Person Info.json
