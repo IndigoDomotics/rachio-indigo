@@ -104,3 +104,5 @@ ENV/
 /.gitignore
 /device dump
 /webhook payloads
+/Rachio Sprinkler.indigoPlugin.zip
+/.DS_Store
