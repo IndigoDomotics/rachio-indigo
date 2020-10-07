@@ -97,7 +97,12 @@ ENV/
 
 # PyCharm/IntelliJ settings
 .idea
-/webhook payloads
-/device dump
 /Gen2 Person Info.json
+/webhook events
+/Webhook types and sample JSON.webloc
+/Webhook.site.webloc
+/.gitignore
+/device dump
+/webhook payloads
 /Rachio Sprinkler.indigoPlugin.zip
+/.DS_Store
