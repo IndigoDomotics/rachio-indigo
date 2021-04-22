@@ -404,22 +404,37 @@ class Plugin(indigo.PluginBase):
         if not self.use_webhooks:
             return
             
-        # set up for webhooks with the HTTPd 2 plugin
-        httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd2")
-        if not httpd_plugin.isEnabled():
-            self.logger.debug("HTTPd 2 plugin not enabled, disabling webhooks")
-            self.use_webhooks = False        
-            return
+        # Test here to see if Reflector webhook is available, get reflector name, etc.
+        if True:
+        
+            username = "Indigo"
+            password = "user4Indigo"
+            reflector = "fd-dev"
+            self.webhook_url = "http://{}:{}@{}.indigodomo.net/message/com.indigodomo.opensource.rachio/webhook".format(username, password, reflector)
+            self.logger.debug("Using Reflector, webhook_url: {}".format(self.webhook_url))
+    
+        else:       # try to set up for webhooks with the HTTPd 2 plugin
+        
+            httpd_plugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.httpd2")
+            if not httpd_plugin.isEnabled():
+                self.logger.debug("HTTPd 2 plugin not enabled, disabling webhooks")
+                self.use_webhooks = False        
+                return
 
-        props = {u"name": self.pluginId, u"server": self.pluginPrefs.get("httpServerID", None)}
-        self.webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props=props, waitUntilDone=True)            
-        if not self.webhook_info:
-            self.logger.debug("HTTPd 2 plugin did not provide webhook info, disabling webhooks")
-            self.use_webhooks = False        
-            return
+            props = {u"name": self.pluginId, u"server": self.pluginPrefs.get("httpServerID", None)}
+            webhook_info = httpd_plugin.executeAction("getWebhookInfo", deviceId=0, props=props, waitUntilDone=True)            
+            if not webhook_info:
+                self.logger.debug("HTTPd 2 plugin did not provide webhook info, disabling webhooks")
+                self.use_webhooks = False        
+                return
+            self.webhook_url = webhook_info.get("hook_url", None)
+            if not self.webhook_url:
+                 self.logger.debug("HTTPd 2 plugin did not provide webhook info, disabling webhooks")
+                 self.use_webhooks = False        
+                 return
 
-        self.logger.debug("Using HTTPd 2 plugin, webhook_info: {}".format(self.webhook_info))
-        indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.httpd2", self.webhook_info["hook_name"], "webHook_handler")
+            indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.httpd2", webhook_info["hook_name"], "httpd_handler")
+            self.logger.debug("Using HTTPd 2 plugin, webhook_info: {}".format(webhook_info))
 
     ########################################
     def shutdown(self):
@@ -444,12 +459,23 @@ class Plugin(indigo.PluginBase):
 
     ########################################
 
-    def webHook_handler(self, hookJSON):
-        hookData = json.loads(hookJSON)
-        payload = json.loads(hookData["payload"])
+    def reflector_handler(self, action, dev=None, callerWaitingForResult=None):
+        request_body = action.props['request_body']
+        self.logger.debug(u"reflector_handler: {}".format(request_body))
+        self.webHook_handler(json.loads(request_body))
+        return ""
 
+    def httpd_handler(self, hookJSON):
+        hookData = json.loads(hookJSON)
+        self.logger.debug("httpd_handler: {}".format(hookData))
+        self.webHook_handler(json.loads(hookData["payload"]))
+        return None
+        
+
+    def webHook_handler(self, payload):
+        self.logger.debug(u"webHook_handler: {}".format(payload))
+    
         self.logger.info(u"webHook received, {}/{}/{}/{}: {}".format(payload.get("category", ""), payload.get("type", ""), payload.get("subType", ""), payload.get("eventType", ""), payload.get("summary", "")))
-        self.logger.debug(u"webHook_handler - payload: {}".format(payload))
 
         # Find the Indigo device for the Rachio Device
         for dev in indigo.devices.iter(filter="self"):
@@ -637,13 +663,8 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("Rachio device '{}' configured with unknown ID. Reconfigure the device to make it active.".format(dev.name))
 
         # set up webhooks for this device
-        
+    
         if not self.use_webhooks:
-            return
-
-        webhook_url = self.webhook_info.get("hook_url", None)
-        if not webhook_url:
-            self.use_webhooks = False        
             return
         
         url = (API_URL + "notification/webhook_event_type").format(apiVersion=RACHIO_API_VERSION)
@@ -653,7 +674,7 @@ class Plugin(indigo.PluginBase):
             data = {
                 "device" : {"id": dev.pluginProps["id"]},
                 "externalId" : dev.id,
-                "url" : webhook_url,
+                "url" : self.webhook_url,
                 "eventTypes":[{"id": r[u'id']}]            
             }
             try:

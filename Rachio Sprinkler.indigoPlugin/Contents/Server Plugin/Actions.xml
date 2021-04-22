@@ -51,4 +51,10 @@
             </Field>
         </ConfigUI>
     </Action>
+
+    <Action id="webhook" uiPath="hidden">
+        <Name>Reflector Webhooks</Name>
+        <CallbackMethod>reflector_handler</CallbackMethod>
+    </Action>
+    
 </Actions>
