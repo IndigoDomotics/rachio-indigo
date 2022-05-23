@@ -109,11 +109,12 @@ class Plugin(indigo.PluginBase):
         self.unused_devices = {}
         self.access_token = pluginPrefs.get("accessToken", None)
         self.person_id = pluginPrefs.get("personId", None)
+        self.maxZoneRunTime = int(pluginPrefs.get("maxZoneRunTime", RACHIO_MAX_ZONE_DURATION))
 
         if self.access_token:
             self.headers = {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer {}".format(self.access_token)
+                "Authorization": f"Bearer {self.access_token}"
             }
         else:
             self.logger.warn("You must specify your API token in the plugin's config before the plugin can be used.")
@@ -182,14 +183,13 @@ class Plugin(indigo.PluginBase):
             raise exc
         except ThrottleDelayError as exc:
             self.logger.error(str(exc))
-            self.logger.debug("{}:\n{}".format(str(exc), traceback.format_exc(10)))
+            self.logger.debug(f"{str(exc)}:\n{traceback.format_exc(10)}")
             raise exc
         except Exception as exc:
             self.logger.error(
-                "Connection to Rachio API server failed with exception: {}. Check the log file for full details.".format(
-                    exc.__class__.__name__))
+                f"Connection to Rachio API server failed with exception: {exc.__class__.__name__}. Check the log file for full details.")
             self.logger.debug(
-                "Connection to Rachio API server failed with exception:\n{}".format(traceback.format_exc(10)))
+                f"Connection to Rachio API server failed with exception:\n{traceback.format_exc(10)}")
             raise exc
 
     ########################################
@@ -221,7 +221,7 @@ class Plugin(indigo.PluginBase):
                         self.pluginPrefs["personId"] = self.person_id
                     except Exception as exc:
                         self.logger.error("Error getting user ID from Rachio via API.")
-                        self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                        self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
                         self._fireTrigger("personCall")
                         return
                 try:
@@ -231,7 +231,7 @@ class Plugin(indigo.PluginBase):
                     self.rachio_devices = self.person["devices"]
                 except Exception as exc:
                     self.logger.error("Error getting user data from Rachio via API.")
-                    self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                    self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
                     self._fireTrigger("personInfoCall")
                     return
 
@@ -429,6 +429,7 @@ class Plugin(indigo.PluginBase):
         reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
         if not reflector_api_key:
             self.logger.warning("Unable to set up Rachio webhooks - no reflector API key")
+            self.use_webhooks = False
 
         self.webhook_url = f"{reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}"
         self.logger.debug(f"Using Reflector, webhook_url: {self.webhook_url}")
@@ -660,9 +661,7 @@ class Plugin(indigo.PluginBase):
                 self._next_weather_update = datetime.now()
                 self._update_forecast_data(dev)
             else:
-                self.logger.error(
-                    "Rachio device '{}' configured with unknown ID. Reconfigure the device to make it active.".format(
-                        dev.name))
+                self.logger.error(f"Rachio device '{dev.name}' configured with unknown ID. Reconfigure the device to make it active.")
 
         # set up webhooks for this device
 
@@ -681,26 +680,26 @@ class Plugin(indigo.PluginBase):
             }
             try:
                 self._make_api_call(url, request_method="post", data=data)
-                self.logger.debug("subscribed to webhook: {} ({})".format(r[u'name'], r[u'id']))
+                self.logger.debug(f"subscribed to webhook: {r['name']} ({r['id']})")
             except (Exception,):
-                self.logger.debug("subscription failure for webhook: {} ({})".format(r[u'name'], r[u'id']))
+                self.logger.debug(f"subscription failure for webhook: {r['name']} ({r['id']})")
 
     ########################################
     def deviceStopComm(self, dev):
 
         # remove webhooks
+        if not self.use_webhooks:
+            return
 
-        url = (API_URL + "notification/{devId}/webhook").format(apiVersion=RACHIO_API_VERSION,
-                                                                devId=dev.pluginProps["id"])
+        url = (API_URL + "notification/{devId}/webhook").format(apiVersion=RACHIO_API_VERSION, devId=dev.pluginProps["id"])
         reply = self._make_api_call(url)
         for r in reply:
             url = (API_URL + "notification/webhook/{whid}").format(apiVersion=RACHIO_API_VERSION, whid=r["id"])
             try:
                 self._make_api_call(url, request_method="delete")
-                self.logger.debug("unsubscribed from webhook: {} ({})".format(r["eventTypes"][0][u'name'], r[u'id']))
+                self.logger.debug(f"unsubscribed from webhook: {r['eventTypes'][0]['name']} ({r['id']})")
             except (Exception,):
-                self.logger.debug(
-                    "unsubscribe failure for webhook: {} ({})".format(r["eventTypes"][0][u'name'], r[u'id']))
+                self.logger.debug(f"unsubscribe failure for webhook: {r['eventTypes'][0]['name']} ({r['id']})")
 
     ########################################
     # Event callbacks
@@ -733,15 +732,15 @@ class Plugin(indigo.PluginBase):
                     indigo.trigger.execute(trigger)
         except Exception as exc:
             self.logger.error(u"An error occurred during trigger processing")
-            self.logger.debug(u"An error occurred during trigger processing: \n{}".format(traceback.format_exc(10)))
+            self.logger.debug(f"An error occurred during trigger processing: \n{traceback.format_exc(10)}")
 
     ########################################
     def triggerStartProcessing(self, trigger):
         super(Plugin, self).triggerStartProcessing(trigger)
-        self.logger.debug("Start processing trigger " + str(trigger.id))
+        self.logger.debug(f"Start processing trigger {str(trigger.id)}")
         if trigger.id not in self.triggerDict:
             self.triggerDict[trigger.id] = trigger
-        self.logger.debug("Start trigger processing list: " + str(self.triggerDict))
+        self.logger.debug(f"Start trigger processing list: {str(self.triggerDict)}")
 
     ########################################
     def triggerStopProcessing(self, trigger):
@@ -752,7 +751,7 @@ class Plugin(indigo.PluginBase):
         except (Exception,):
             # the trigger isn't in the list for some reason so just skip it
             pass
-        self.logger.debug("Stop trigger processing list: " + str(self.triggerDict))
+        self.logger.debug(f"Stop trigger processing list: {str(self.triggerDict)}")
 
     ########################################
     # Sprinkler Control Action callback
@@ -761,33 +760,31 @@ class Plugin(indigo.PluginBase):
         # ZONE ON #
         if action.sprinklerAction == indigo.kSprinklerAction.ZoneOn:
             if self.throttle_next_call:
-                self.logger.error("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
-                    self.throttle_next_call)
-                )
+                self.logger.error(f"API calls have violated rate limit - next connection attempt at {self.throttle_next_call:%H:%M:%S}"
+                                  )
                 self._fireTrigger("startZoneFailed", dev.id)
             else:
                 zone_dict = self._get_zone_dict(dev.states["id"], action.zoneIndex)
+                self.logger.debug(f"zone_dict: {zone_dict}")
                 if zone_dict:
                     zoneName = zone_dict["name"]
                     data = {
                         "id": zone_dict["id"],
-                        "duration": zone_dict["maxRuntime"] if zone_dict[
-                                                                   "maxRuntime"] <= RACHIO_MAX_ZONE_DURATION else RACHIO_MAX_ZONE_DURATION,
+                        "duration": zone_dict["maxRuntime"] if zone_dict["maxRuntime"] <= self.maxZoneRunTime else self.maxZoneRunTime,
                     }
                     try:
                         self._make_api_call(ZONE_START_URL.format(apiVersion=RACHIO_API_VERSION), request_method="put",
                                             data=data)
-                        self.logger.info(u'sent "{} - {}" on'.format(dev.name, zoneName))
+                        self.logger.info(f'sent "{dev.name} - {zoneName}" on')
                         dev.updateStateOnServer("activeZone", action.zoneIndex)
                     except (Exception,):
                         # Else log failure but do NOT update state on Indigo Server. Also, fire any triggers the user has
                         # on zone start failures.
-                        self.logger.error(u'send "{} - {}" on failed'.format(dev.name, zoneName))
-                        self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                        self.logger.error(f'send "{dev.name} - {zoneName}" on failed')
+                        self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
                         self._fireTrigger("startZoneFailed", dev.id)
                 else:
-                    self.logger.error("Zone number {} doesn't exist in this controller and can't be enabled.".format(
-                        action.zoneIndex))
+                    self.logger.error(f"Zone number {action.zoneIndex} doesn't exist in this controller and can't be enabled.")
                     self._fireTrigger("startZoneFailed", dev.id)
 
         # ALL ZONES OFF #
@@ -796,14 +793,13 @@ class Plugin(indigo.PluginBase):
                 "id": dev.states["id"],
             }
             try:
-                self._make_api_call(DEVICE_STOP_WATERING_URL.format(apiVersion=RACHIO_API_VERSION),
-                                    request_method="put", data=data)
-                self.logger.info(u'sent "{}" {}'.format(dev.name, "all zones off"))
+                self._make_api_call(DEVICE_STOP_WATERING_URL.format(apiVersion=RACHIO_API_VERSION), request_method="put", data=data)
+                self.logger.info(f'sent "{dev.name}" {"all zones off"}')
                 dev.updateStateOnServer("activeZone", 0)
             except (Exception,):
                 # Else log failure but do NOT update state on Indigo Server.
-                self.logger.info(u'send "{}" {} failed'.format(dev.name, "all zones off"))
-                self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+                self.logger.info(f'send "{dev.name}" {"all zones off"} failed')
+                self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
                 self._fireTrigger("stopFailed", dev.id)
 
         ############################################
@@ -836,9 +832,8 @@ class Plugin(indigo.PluginBase):
     def runRachioSchedule(self, pluginAction, dev):
         schedule_rule_id = pluginAction.props["scheduleId"]
         if self.throttle_next_call:
-            self.logger.error("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
-                self.throttle_next_call)
-            )
+            self.logger.error(f"API calls have violated rate limit - next connection attempt at {self.throttle_next_call:%H:%M:%S}"
+                              )
             self._fireTrigger("startRachioScheduleFailed", dev.id)
         else:
             dev_dict = self._get_device_dict(dev.states["id"])
@@ -850,9 +845,8 @@ class Plugin(indigo.PluginBase):
                             "id": schedule_rule_id,
                         }
                         self._make_api_call(SCHEDULERULE_START_URL, request_method="put", data=data)
-                        self.logger.info("Rachio schedule '{}' started".format(schedule_id_dict[schedule_rule_id]))
-                        self.logger.warn(
-                            "Note: frequently requesting dynamic status updates may cause failures later because of Rachio API polling limits. Use sparingly.")
+                        self.logger.info(f"Rachio schedule '{schedule_id_dict[schedule_rule_id]}' started")
+                        self.logger.warn("Note: frequently requesting dynamic status updates may cause failures later because of Rachio API polling limits. Use sparingly.")
                         return
                     except Exception as exc:
                         self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
@@ -868,9 +862,8 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Seasonal adjustments must be specified as an integer from -100 to 100 (a percentage)")
             return
         if self.throttle_next_call:
-            self.logger.error("API calls have violated rate limit - next connection attempt at {:%H:%M:%S}".format(
-                self.throttle_next_call)
-            )
+            self.logger.error(f"API calls have violated rate limit - next connection attempt at {self.throttle_next_call:%H:%M:%S}"
+                              )
             self._fireTrigger("setSeasonalAdjustmentFailed", dev.id)
         else:
             schedule_rule_id = pluginAction.props["scheduleId"]
@@ -885,7 +878,7 @@ class Plugin(indigo.PluginBase):
                         }
                         self._make_api_call(SCHEDULERULE_START_URL, request_method="put", data=data)
                         self.logger.info(
-                            "Rachio seasonal adjustment set to {}%".format(pluginAction.props["adjustment"]))
+                            f"Rachio seasonal adjustment set to {pluginAction.props['adjustment']}%")
                         return
                     except Exception as exc:
                         self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
@@ -905,11 +898,10 @@ class Plugin(indigo.PluginBase):
                 # You turn the device on to take it out of standby mode
                 url = DEVICE_TURN_ON_URL.format(apiVersion=RACHIO_API_VERSION)
             self._make_api_call(url, request_method="put", data=data)
-            self.logger.info("Standby mode for controller '{}' turned {}".format(dev.name, "on" if pluginAction.props[
-                "mode"] else "off"))
+            self.logger.info(f"Standby mode for controller '{dev.name}' turned {'on' if pluginAction.props['mode'] else 'off'}")
         except Exception as exc:
             self.logger.error("Could not set standby mode - check your controller.")
-            self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+            self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
             self._fireTrigger("setStandbyFailed", dev.id)
 
     ########################################
@@ -945,7 +937,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info("{}: Toggling standby mode".format(dev.name))
         except Exception as exc:
             self.logger.error("Could not set standby mode - check your controller.")
-            self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
+            self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
             self._fireTrigger("setStandbyFailed", dev.id)
 
     ########################################

@@ -19,12 +19,16 @@
 		<Label>Number of seconds to wait for the API to reply before continuing. You probably don't need to adjust this unless instructed by support.</Label>
 	</Field>
     <Field id="sep3" type="separator"/>
+    <Field id="maxZoneRunTime" type="textfield" defaultValue="10800">
+        <Label>Max Run Time per Zone</Label>
+    </Field>
+    <Field id="sep4" type="separator"/>
     <Field id="useWebhooks" type="checkbox" defaultValue="false">
         <Label>Use Rachio API Webhooks</Label>
     </Field>
     <Field id="useWebhooksNote" type="label" fontSize="small" fontColor="darkgray">
         <Label>Requires Indigo Reflector.</Label>
-    </Field>    
+    </Field>
    <Field id="reflector_api_key" type="textfield">
         <Label>Reflector REST API key:</Label>
     </Field>
