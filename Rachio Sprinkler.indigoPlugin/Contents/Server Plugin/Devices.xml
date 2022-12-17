@@ -188,7 +188,7 @@
             <State id="t0forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Today (T0) Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>Today (T0) Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>Today (T0) Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t0forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -263,7 +263,7 @@
             <State id="t1forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T1 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T1 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T1 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t1forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -338,7 +338,7 @@
             <State id="t2forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T2 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T2 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T2 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t2forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -413,7 +413,7 @@
             <State id="t3forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T3 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T3 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T3 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t3forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -488,7 +488,7 @@
             <State id="t4forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T4 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T4 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T4 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t4forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -563,7 +563,7 @@
             <State id="t5forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T5 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T5 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T5 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t5forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -638,7 +638,7 @@
             <State id="t6forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T6 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T6 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T6 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t6forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -713,7 +713,7 @@
             <State id="t7forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T7 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T7 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T7 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t7forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -788,7 +788,7 @@
             <State id="t8forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T8 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T8 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T8 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t8forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -863,7 +863,7 @@
             <State id="t9forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T9 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T9 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T9 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t9forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -938,7 +938,7 @@
             <State id="t10forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T10 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T10 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T10 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t10forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -1013,7 +1013,7 @@
             <State id="t11forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T11 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T11 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T11 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t11forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -1088,7 +1088,7 @@
             <State id="t12forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T12 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T12 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T12 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t12forecast_temperatureMax">
                 <ValueType>Number</ValueType>
@@ -1163,7 +1163,7 @@
             <State id="t13forecast_temperatureMin">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>T13 Forecast - Low Temperature</TriggerLabel>
-                <ControlPageLabel>T13 Forecast - High Temperature</ControlPageLabel>
+                <ControlPageLabel>T13 Forecast - Low Temperature</ControlPageLabel>
             </State>
             <State id="t13forecast_temperatureMax">
                 <ValueType>Number</ValueType>
