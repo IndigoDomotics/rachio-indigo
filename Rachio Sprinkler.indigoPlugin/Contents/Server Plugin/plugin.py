@@ -370,7 +370,11 @@ class Plugin(indigo.PluginBase):
                 reply_dict = self._make_api_call(
                     DEVICE_GET_FORECAST_URL.format(apiVersion=RACHIO_API_VERSION, deviceId=dev.states["id"],
                                                    units=units))
-                current_conditions = reply_dict["current"]
+                current_conditions = reply_dict.get("current", None)
+                if not current_conditions:
+                    self.logger.warning("No current conditions returned from API")
+                    return
+                
                 state_update_list = []
                 for k, v in current_conditions.items():
                     if k in FORECAST_FIELDS_USED:
