@@ -18,6 +18,17 @@
 	<Field id="apiCallTimeoutLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true">
 		<Label>Number of seconds to wait for the API to reply before continuing. You probably don't need to adjust this unless instructed by support.</Label>
 	</Field>
+    <Field id="sep_statusscope" type="separator"/>
+    <Field id="statusRequestScope" type="menu" defaultValue="all">
+        <Label>On API call, refresh:</Label>
+        <List>
+            <Option value="all">All states</Option>
+            <Option value="controller">Only Rachio Controller states</Option>
+        </List>
+    </Field>
+    <Field id="statusRequestScopeLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true">
+        <Label>What a status-request (RequestStatus) API call refreshes. "All states" is the original behavior (account, every controller's schedule, and weather). "Only Rachio Controller states" fetches just the requested controller's current schedule/active zone — far fewer Rachio API calls when something polls status frequently (e.g. a flow monitor requesting status every 30s while water flows). The 3-minute background poll still refreshes everything.</Label>
+    </Field>
     <Field id="sep3" type="separator"/>
     <Field id="maxZoneRunTime" type="textfield" defaultValue="10800">
         <Label>Max Run Time per Zone</Label>

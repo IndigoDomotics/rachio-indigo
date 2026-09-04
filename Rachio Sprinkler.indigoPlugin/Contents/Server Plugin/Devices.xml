@@ -43,6 +43,31 @@
                 <TriggerLabel>Active Rachio Schedule</TriggerLabel>
                 <ControlPageLabel>Active Rachio Schedule</ControlPageLabel>
             </State>
+            <State id="activeSchedulePlan">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Active Schedule Per-Zone Plan</TriggerLabel>
+                <ControlPageLabel>Active Schedule Per-Zone Plan</ControlPageLabel>
+            </State>
+            <State id="activeZoneDuration">
+                <ValueType>Integer</ValueType>
+                <TriggerLabel>Active Zone Planned Duration (seconds)</TriggerLabel>
+                <ControlPageLabel>Active Zone Planned Duration (seconds)</ControlPageLabel>
+            </State>
+            <State id="activeZoneStartDate">
+                <ValueType>Integer</ValueType>
+                <TriggerLabel>Active Zone Start Date (epoch seconds)</TriggerLabel>
+                <ControlPageLabel>Active Zone Start Date (epoch seconds)</ControlPageLabel>
+            </State>
+            <State id="activeScheduleDuration">
+                <ValueType>Integer</ValueType>
+                <TriggerLabel>Active Schedule Total Duration (seconds)</TriggerLabel>
+                <ControlPageLabel>Active Schedule Total Duration (seconds)</ControlPageLabel>
+            </State>
+            <State id="activeScheduleStartDate">
+                <ValueType>Integer</ValueType>
+                <TriggerLabel>Active Schedule Start Date (epoch seconds)</TriggerLabel>
+                <ControlPageLabel>Active Schedule Start Date (epoch seconds)</ControlPageLabel>
+            </State>
             <State id="latitude">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Latitude</TriggerLabel>
