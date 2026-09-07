@@ -14,12 +14,17 @@ from datetime import datetime, timedelta, time
 from dateutil import tz
 from distutils.version import LooseVersion
 import random
+# 2026-08-17 (Ham + Claude): aliased because `time` above is datetime.time
+# (time-of-day), not the time module -- needed for a real UTC epoch-ms
+# clock, see _shouldAcceptZoneUpdate.
+import time as time_module
 
 RACHIO_API_VERSION = "1"
 RACHIO_MAX_ZONE_DURATION = 10800
 DEFAULT_API_CALL_TIMEOUT = 5  # number of seconds after which we time out any network calls
 MINIMUM_POLLING_INTERVAL = 3  # number of minutes between each poll, default is 3 (changed 2/27/2018 to help avoid throttling)
 DEFAULT_WEATHER_UPDATE_INTERVAL = 10  # number of minutes between each forecast update, default is 10
+DEFAULT_PERSON_UPDATE_INTERVAL = 15  # 2026-09-01 (Ham + Claude): minutes between full account/person refreshes (D — throttle person-data off the 3-min poll)
 THROTTLE_LIMIT_TIMER = 61  # number of minutes to wait if we've received a throttle error before doing any API calls
 FORECAST_UPDATE_INTERVAL = 60  # minutes between forecast updates
 
@@ -121,9 +126,49 @@ class Plugin(indigo.PluginBase):
             self.headers = None
         self.triggerDict = {}
         self._next_weather_update = datetime.now()
+        # 2026-09-01 (Ham + Claude): D — throttle the full account/person fetch off the
+        # 3-min poll. self.person caches the last account snapshot; between refreshes the
+        # poll reuses it for device metadata while STILL fetching each controller's live
+        # current_schedule (running state) + weather (own timer). Person data (zones,
+        # names, location, schedule mode) rarely changes, so re-fetching the heavy
+        # account call every 3 min was wasted budget — refresh it every
+        # personUpdateInterval minutes instead (~20/hr → ~4/hr).
+        self.person = None
+        self.rachio_devices = None
+        self._next_person_update = datetime.now()  # first poll fetches
+        self.personUpdateInterval = int(pluginPrefs.get("personUpdateInterval", DEFAULT_PERSON_UPDATE_INTERVAL))
+        # 2026-09-01 (Ham + Claude): restore an active rate-limit backoff across a
+        # plugin reload. throttle_next_call was in-memory only, so a reload forgot it
+        # and immediately re-hammered a still-throttled API — each 429 pushes the reset
+        # further out (self-inflicted lockout extension). Persist it and honor on start.
         self.throttle_next_call = None
+        try:
+            _saved_throttle_ts = float(pluginPrefs.get("throttle_next_call_ts", 0) or 0)
+            if _saved_throttle_ts:
+                _resume_at = datetime.fromtimestamp(_saved_throttle_ts)
+                if _resume_at > datetime.now():
+                    self.throttle_next_call = _resume_at
+                    self.logger.warning(
+                        f"Rachio API still in rate-limit backoff from before reload — "
+                        f"holding all calls until {self.throttle_next_call:%H:%M:%S}.")
+        except Exception:
+            self.throttle_next_call = None
         self.webhook_url = None
         self.use_webhooks = False
+        # 2026-08-17 (Ham + Claude), real incident: webhooks (real-time,
+        # push-based) and the poll in _update_from_rachio (an HTTP round-
+        # trip that can be in flight for several seconds) both write
+        # activeZone/activeZone.ui to the same device states with no
+        # ordering guarantee -- confirmed live: a poll response that
+        # started before a newer webhook already advanced the zone can
+        # still complete afterward and overwrite the correct value with a
+        # stale one. Observed consequence in the consuming plugin (SFM):
+        # one such stale write persisted long enough to defeat SFM's own
+        # debounce and get committed as a real (backward) zone transition,
+        # merging one zone's water into another's tally. Tracks, per
+        # device id, the zoneStartDate (epoch ms) of whatever zone is
+        # currently believed live -- see _shouldAcceptZoneUpdate.
+        self._last_zone_start_ms = {}
 
     ########################################
     # Internal helper methods
@@ -138,6 +183,7 @@ class Plugin(indigo.PluginBase):
                         f"API calls have violated rate limit - next connection attempt at {self.throttle_next_call:%H:%M:%S}")
                 else:
                     self.throttle_next_call = None
+                    self.pluginPrefs["throttle_next_call_ts"] = 0   # 2026-09-01 (Ham + Claude): clear persisted backoff
             return_val = None
             if request_method == "put":
                 method = requests.put
@@ -179,6 +225,7 @@ class Plugin(indigo.PluginBase):
             if exc.response.status_code == 429:
                 # We've hit the throttle limit - we need to back off on all requests for some period of time
                 self.throttle_next_call = datetime.now() + timedelta(minutes=THROTTLE_LIMIT_TIMER)
+                self.pluginPrefs["throttle_next_call_ts"] = self.throttle_next_call.timestamp()  # 2026-09-01 (Ham + Claude): survive reloads
                 self._fireTrigger("rateLimitExceeded")
             raise exc
         except ThrottleDelayError as exc:
@@ -210,6 +257,28 @@ class Plugin(indigo.PluginBase):
         return None
 
     ########################################
+    def _shouldAcceptZoneUpdate(self, devId, new_start_ms):
+        """2026-08-17 (Ham + Claude): guards against the poll/webhook write
+        race described where self._last_zone_start_ms is set up. new_start_ms
+        is the zoneStartDate (epoch ms) the CALLER wants to write for devId.
+        Returns True (accept, and record new_start_ms as the new high-water
+        mark) unless new_start_ms is nonzero AND strictly older than the
+        most recent zoneStartDate already recorded for this device -- that
+        specific combination means this write is for a zone that's already
+        been superseded by fresher data, almost always a slow poll response
+        landing after a newer webhook already moved things forward. A
+        missing/zero new_start_ms (some responses may not carry one) is
+        always accepted -- there's nothing to compare, and refusing every
+        such write would break normal operation, not just the race case."""
+        if not new_start_ms:
+            return True
+        last_known = self._last_zone_start_ms.get(devId, 0)
+        if last_known and new_start_ms < last_known:
+            return False
+        self._last_zone_start_ms[devId] = new_start_ms
+        return True
+
+    ########################################
     def _update_from_rachio(self):
         self.logger.debug("_update_from_rachio")
         try:
@@ -224,16 +293,26 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
                         self._fireTrigger("personCall")
                         return
-                try:
-                    reply_dict = self._make_api_call(
-                        PERSON_URL.format(apiVersion=RACHIO_API_VERSION, personId=self.person_id))
-                    self.person = reply_dict
-                    self.rachio_devices = self.person["devices"]
-                except Exception as exc:
-                    self.logger.error("Error getting user data from Rachio via API.")
-                    self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
-                    self._fireTrigger("personInfoCall")
-                    return
+                # 2026-09-01 (Ham + Claude): D — only re-fetch the full account/person
+                # snapshot when the throttle window has elapsed (or we have no cached
+                # snapshot yet). Between refreshes we reuse self.person for device
+                # metadata; the per-device current_schedule (running state) and weather
+                # below still run every poll, so live state stays fresh while the heavy
+                # account call drops from ~20/hr to ~4/hr.
+                if self.person is None or datetime.now() >= self._next_person_update:
+                    try:
+                        reply_dict = self._make_api_call(
+                            PERSON_URL.format(apiVersion=RACHIO_API_VERSION, personId=self.person_id))
+                        self.person = reply_dict
+                        self.rachio_devices = self.person["devices"]
+                        self._next_person_update = datetime.now() + timedelta(minutes=self.personUpdateInterval)
+                    except Exception as exc:
+                        self.logger.error("Error getting user data from Rachio via API.")
+                        self.logger.debug(f"API error: \n{traceback.format_exc(10)}")
+                        self._fireTrigger("personInfoCall")
+                        if self.person is None:
+                            return  # no cached snapshot to fall back on
+                        # else: proceed this cycle with the cached account snapshot
 
                 current_device_uuids = [s.states["id"] for s in indigo.devices.iter(filter="self")]
                 self.unused_devices = {dev_dict["id"]: dev_dict for dev_dict in self.person["devices"] if
@@ -305,27 +384,138 @@ class Plugin(indigo.PluginBase):
                                     DEVICE_CURRENT_SCHEDULE_URL.format(apiVersion=RACHIO_API_VERSION,
                                                                        deviceId=dev.states["id"]))
                                 if len(current_schedule_dict):
+                                    # Diagnostic dump of Rachio's raw current-schedule response
+                                    # (carries per-zone duration data). GATED behind debug logging
+                                    # (Toggle Debugging menu) so it's on-demand, quiet otherwise.
+                                    if self.debug:
+                                        self.logger.info(
+                                            f"{dev.name}: [DIAG] raw current_schedule_dict = "
+                                            f"{current_schedule_dict}")
                                     # Something is running, so we need to figure out if it's a manual or automatic schedule and
                                     # if it's automatic (a Rachio schedule) then we need to get the name of that schedule
+                                    #
+                                    # 2026-08-17 (Ham + Claude), real incident: this API call can
+                                    # take several seconds to complete. If a webhook for a NEWER
+                                    # zone transition arrives and updates activeZone while this
+                                    # call was already in flight, this response is now stale --
+                                    # writing it unconditionally would overwrite the correct,
+                                    # newer value with an old one. Confirmed live in the
+                                    # consuming plugin (SFM): exactly this caused a real backward
+                                    # zone-tracking error. _shouldAcceptZoneUpdate compares this
+                                    # response's own zoneStartDate against the most recent one
+                                    # already seen for this device and skips the write (only for
+                                    # activeZone/activeZoneDuration/activeZoneStartDate -- nothing
+                                    # else in this update cycle) if this response is for an
+                                    # already-superseded zone.
+                                    if self._shouldAcceptZoneUpdate(
+                                            dev.id, current_schedule_dict.get("zoneStartDate", 0)):
+                                        update_list.append(
+                                            {"key": "activeZone",
+                                             "value": current_schedule_dict["zoneNumber"]})
+                                        # 2026-08-17 (Ham + Claude): current_schedule_dict already
+                                        # carries the active zone's planned duration and start time
+                                        # (zoneDuration seconds, zoneStartDate epoch ms) -- confirmed
+                                        # live for an AUTOMATIC (cron-triggered) run. Exposing both as
+                                        # real states so SFM can attribute flow by timestamp against
+                                        # Rachio's own authoritative schedule instead of reacting to
+                                        # every activeZone change immediately (the source of the
+                                        # flapping/misattribution issues found 2026-08-17). Using
+                                        # .get() since it's still unconfirmed whether a MANUALLY-
+                                        # started run of a real schedule includes these same keys.
+                                        update_list.append(
+                                            {"key": "activeZoneDuration",
+                                             "value": current_schedule_dict.get("zoneDuration", 0)})
+                                        # 2026-08-29 (Ham + Claude): store epoch SECONDS, not the raw
+                                        # epoch MILLISECONDS Rachio returns. The SQL Logger's Postgres
+                                        # backend types state columns as 32-bit integer (max ~2.1e9);
+                                        # an epoch-ms value (~1.79e12) overflows and errors on every
+                                        # write during a run. Epoch seconds (~1.79e9) fits. // 1000
+                                        # keeps 0 (missing key) as 0.
+                                        update_list.append(
+                                            {"key": "activeZoneStartDate",
+                                             "value": current_schedule_dict.get("zoneStartDate", 0) // 1000})
+                                    else:
+                                        self.logger.debug(
+                                            f"{dev.name}: skipping stale activeZone write -- "
+                                            f"this poll response's zone already superseded by "
+                                            f"newer data.")
+                                    # 2026-08-17 (Ham + Claude): same response also carries the
+                                    # WHOLE schedule's own duration/startDate (not just the
+                                    # current zone's) -- Ham's use case: the all-zones-off
+                                    # watchdog (SFM's RACHIO_ALL_OFF_DEBOUNCE_SECONDS) currently
+                                    # waits a blind 90s any time Rachio reports "all zones off"
+                                    # mid-run, purely because that signal alone can't distinguish
+                                    # a genuine finish from a cloud-side flap. Knowing the
+                                    # schedule's own expected end time lets SFM corroborate:
+                                    # deliberately NOT cleared in the "no active schedule" branch
+                                    # below -- these must still be readable for a little while
+                                    # AFTER the schedule ends, which is exactly when SFM needs to
+                                    # compare against them.
                                     update_list.append(
-                                        {"key": "activeZone", "value": current_schedule_dict["zoneNumber"]})
+                                        {"key": "activeScheduleDuration",
+                                         "value": current_schedule_dict.get("duration", 0)})
+                                    # 2026-08-29 (Ham + Claude): epoch SECONDS, not ms — see the
+                                    # activeZoneStartDate note above (32-bit Postgres overflow).
+                                    update_list.append(
+                                        {"key": "activeScheduleStartDate",
+                                         "value": current_schedule_dict.get("startDate", 0) // 1000})
                                     if current_schedule_dict["type"] == "AUTOMATIC":
                                         schedule_detail_dict = self._make_api_call(
                                             SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION,
                                                                     scheduleRuleId=current_schedule_dict[
                                                                         "scheduleRuleId"]))
+                                        # Diagnostic dump of Rachio's raw schedule-detail response
+                                        # (only "name" is normally used, but it carries per-zone
+                                        # durations). GATED behind debug logging (Toggle Debugging
+                                        # menu) so it's on-demand, quiet otherwise.
+                                        if self.debug:
+                                            self.logger.info(
+                                                f"{dev.name}: [DIAG] raw schedule_detail_dict = "
+                                                f"{schedule_detail_dict}")
                                         update_list.append(
                                             {"key": "activeSchedule", "value": schedule_detail_dict["name"]})
                                         activeScheduleName = schedule_detail_dict["name"]
+                                        # 2026-08-29 (Ham + Claude): compose a human-readable per-zone
+                                        # PLAN (zone number + name + planned minutes, in run order) by
+                                        # joining this response's per-zone durations to the device's zone
+                                        # list. Exposed as activeSchedulePlan so SFM can text it at
+                                        # schedule start. AUTOMATIC schedules only (manual runs carry no
+                                        # scheduleRuleId → no per-zone plan).
+                                        try:
+                                            dd = self._get_device_dict(dev.states["id"])
+                                            id_map = {}
+                                            if dd:
+                                                for z in dd.get("zones", []):
+                                                    if z.get("id") is not None:
+                                                        id_map[z["id"]] = (z.get("zoneNumber"), z.get("name"))
+                                            parts = []
+                                            for sz in sorted(schedule_detail_dict.get("zones", []),
+                                                             key=lambda x: x.get("sortOrder", 0)):
+                                                num, nm = id_map.get(sz.get("zoneId"), (None, None))
+                                                mins = round(sz.get("duration", 0) / 60.0, 1)
+                                                label = (f"Zone {num} {nm}" if nm
+                                                         else f"Zone (order {sz.get('sortOrder', '?')})")
+                                                parts.append(f"{label}: {mins:g} min")
+                                            sched_plan = "; ".join(parts)
+                                        except Exception as exc:
+                                            sched_plan = ""
+                                            self.logger.debug(f"{dev.name}: schedule-plan build failed: {exc}")
+                                        update_list.append({"key": "activeSchedulePlan", "value": sched_plan})
 
                                     else:
                                         update_list.append(
                                             {"key": "activeSchedule", "value": current_schedule_dict["type"].title()})
                                         activeScheduleName = current_schedule_dict["type"].title()
+                                        # Manual run — no per-zone plan; clear so a stale AUTOMATIC plan
+                                        # can't be mis-texted for a hand-started run.
+                                        update_list.append({"key": "activeSchedulePlan", "value": ""})
                                 else:
                                     update_list.append({"key": "activeSchedule", "value": "No active schedule"})
                                     # Show no zones active
                                     update_list.append({"key": "activeZone", "value": 0})
+                                    update_list.append({"key": "activeZoneDuration", "value": 0})
+                                    update_list.append({"key": "activeZoneStartDate", "value": 0})
+                                    update_list.append({"key": "activeSchedulePlan", "value": ""})
                             except Exception as exc:
                                 update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
                                 self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
@@ -350,7 +540,13 @@ class Plugin(indigo.PluginBase):
                             props["MaxZoneDurations"] = maxZoneDurations
                             if activeScheduleName:
                                 props["ScheduledZoneDurations"] = activeScheduleName
-                            dev.replacePluginPropsOnServer(props)
+                            # 2026-09-01 (Ham + Claude): only write props when they actually
+                            # changed. replacePluginPropsOnServer restarts device comm on every
+                            # call (no didDeviceCommPropertyChange override), so the unconditional
+                            # per-poll write caused a device-restart storm + didDeviceCommProperty-
+                            # Change log spam. Zone names/counts rarely change between polls.
+                            if dict(props) != dict(dev.pluginProps):
+                                dev.replacePluginPropsOnServer(props)
 
                     # Update the forecasts
 
@@ -411,7 +607,12 @@ class Plugin(indigo.PluginBase):
                                                                               u"F" if units == "US" else u"C")
                                 state_update_list.append(update_dict)
                 dev.updateStatesOnServer(state_update_list)
-                self._next_weather_update = datetime.now() + timedelta(seconds=DEFAULT_WEATHER_UPDATE_INTERVAL)
+                # 2026-09-01 (Ham + Claude): was timedelta(SECONDS=...) — but
+                # DEFAULT_WEATHER_UPDATE_INTERVAL is documented and intended as MINUTES
+                # (10). As seconds, the forecast re-fetch was eligible ~every poll, so a
+                # full 14-day forecast was pulled on essentially every 3-min cycle (and
+                # every forced-weather status request). MINUTES restores the intent.
+                self._next_weather_update = datetime.now() + timedelta(minutes=DEFAULT_WEATHER_UPDATE_INTERVAL)
             except Exception as exc:
                 self.logger.error("Error getting forecast data from Rachio via API.")
                 self.logger.debug("API error: \n{}".format(traceback.format_exc(10)))
@@ -481,6 +682,22 @@ class Plugin(indigo.PluginBase):
             return
 
         eventType = payload.get("eventType", "")
+
+        # 2026-08-17 (Ham + Claude): webhooks are real-time/push-based --
+        # every zone-run event here is, by construction, at least as fresh
+        # as anything a concurrently in-flight poll could be reporting.
+        # Bumping the same freshness marker _shouldAcceptZoneUpdate reads
+        # (using "now" as the timestamp, since these payloads don't carry
+        # their own zoneStartDate) means a poll response that started
+        # before this webhook but completes after it will correctly be
+        # recognized as stale and rejected, even if that poll's own
+        # zoneStartDate looked newer than whatever the LAST POLL had
+        # recorded -- without this, the guard's baseline would only ever
+        # advance on polls, and could still be fooled by a stale poll that
+        # simply hadn't been superseded by a newer POLL yet.
+        if eventType in ('DEVICE_ZONE_RUN_STARTED_EVENT', 'DEVICE_ZONE_RUN_STOPPED_EVENT',
+                          'DEVICE_ZONE_RUN_COMPLETED_EVENT'):
+            self._last_zone_start_ms[dev.id] = time_module.time() * 1000
 
         if eventType == 'DEVICE_ZONE_RUN_STARTED_EVENT':
             dev.updateStateOnServer("activeZone", payload['zoneNumber'])
@@ -595,6 +812,15 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     def deviceStartComm(self, dev):
+        # 2026-08-17 (Ham + Claude): new States (activeZoneDuration,
+        # activeZoneStartDate) added to Devices.xml don't retroactively apply
+        # to an already-existing device instance -- Indigo keeps using the
+        # state list it cached when the device was created/last edited until
+        # explicitly told to refresh it. Confirmed live: a plugin restart
+        # alone was not enough, updateStatesOnServer for the two new keys
+        # silently had nothing to write to. This call re-syncs the device's
+        # state list against the current Devices.xml on every plugin start.
+        dev.stateListOrDisplayStateIdChanged()
         if not dev.pluginProps["configured"]:
             # Get the full device info and update the newly created device
             dev_dict = self.unused_devices.get(dev.pluginProps["id"], None)
@@ -622,7 +848,16 @@ class Plugin(indigo.PluginBase):
                     if len(current_schedule_dict):
                         # Something is running, so we need to figure out if it's a manual or automatic schedule and
                         # if it's automatic (a Rachio schedule) then we need to get the name of that schedule
-                        update_list.append({"key": "activeZone", "value": current_schedule_dict["zoneNumber"]})
+                        #
+                        # 2026-08-17 (Ham + Claude): same write-race guard as
+                        # _update_from_rachio -- this path only runs once, at
+                        # initial device setup, so the race is unlikely here,
+                        # but applying the same check costs nothing and keeps
+                        # both zone-write sites consistent.
+                        if self._shouldAcceptZoneUpdate(
+                                dev.id, current_schedule_dict.get("zoneStartDate", 0)):
+                            update_list.append(
+                                {"key": "activeZone", "value": current_schedule_dict["zoneNumber"]})
                         if current_schedule_dict["type"] == "AUTOMATIC":
                             schedule_detail_dict = self._make_api_call(
                                 SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION,
@@ -824,11 +1059,83 @@ class Plugin(indigo.PluginBase):
     ########################################
     # General Action callback
     ########################################
+    def _refresh_device_schedule(self, dev):
+        """2026-09-01 (Ham + Claude): lean status-request refresh. Fetches ONLY the
+        given controller's current_schedule and updates its active-zone / schedule
+        states — skipping the account/person call, the other controllers, the
+        weather forecast, and the per-cycle zone-property rewrite. Mirrors the
+        current-schedule block in _update_from_rachio and reuses the same
+        _shouldAcceptZoneUpdate race guard, so zone-tracking accuracy is identical;
+        it just costs one API call instead of a full-account refresh. Used when
+        PluginConfig 'statusRequestScope' == 'controller'."""
+        if not self.access_token:
+            return
+        try:
+            device_uuid = dev.states["id"]
+        except Exception:
+            return
+        update_list = []
+        try:
+            current_schedule_dict = self._make_api_call(
+                DEVICE_CURRENT_SCHEDULE_URL.format(apiVersion=RACHIO_API_VERSION, deviceId=device_uuid))
+            if len(current_schedule_dict):
+                # Same stale-write guard as the full poll (skip only the zone keys
+                # if this response is for an already-superseded zone).
+                if self._shouldAcceptZoneUpdate(dev.id, current_schedule_dict.get("zoneStartDate", 0)):
+                    update_list.append({"key": "activeZone", "value": current_schedule_dict["zoneNumber"]})
+                    update_list.append({"key": "activeZoneDuration",
+                                        "value": current_schedule_dict.get("zoneDuration", 0)})
+                    update_list.append({"key": "activeZoneStartDate",
+                                        "value": current_schedule_dict.get("zoneStartDate", 0) // 1000})
+                else:
+                    self.logger.debug(f"{dev.name}: skipping stale activeZone write (lean refresh).")
+                update_list.append({"key": "activeScheduleDuration",
+                                    "value": current_schedule_dict.get("duration", 0)})
+                update_list.append({"key": "activeScheduleStartDate",
+                                    "value": current_schedule_dict.get("startDate", 0) // 1000})
+                if current_schedule_dict["type"] == "AUTOMATIC":
+                    schedule_detail_dict = self._make_api_call(
+                        SCHEDULERULE_URL.format(apiVersion=RACHIO_API_VERSION,
+                                                scheduleRuleId=current_schedule_dict["scheduleRuleId"]))
+                    update_list.append({"key": "activeSchedule", "value": schedule_detail_dict["name"]})
+                else:
+                    update_list.append({"key": "activeSchedule",
+                                        "value": current_schedule_dict["type"].title()})
+            else:
+                # No active schedule: mirror the full poll's zone-off writes. Leave
+                # activeScheduleDuration/StartDate and activeSchedulePlan untouched
+                # (the full poll deliberately keeps them readable after a run ends).
+                update_list.append({"key": "activeSchedule", "value": "No active schedule"})
+                update_list.append({"key": "activeZone", "value": 0})
+                update_list.append({"key": "activeZoneDuration", "value": 0})
+                update_list.append({"key": "activeZoneStartDate", "value": 0})
+        except Exception:
+            update_list.append({"key": "activeSchedule", "value": "Error getting current schedule"})
+            self.logger.debug("API error (lean refresh):\n{}".format(traceback.format_exc(10)))
+            self._fireTrigger("getScheduleCall")
+        if len(update_list):
+            dev.updateStatesOnServer(update_list)
+
     def actionControlUniversal(self, action, dev):
         # STATUS REQUEST #
         if action.deviceAction == indigo.kUniversalAction.RequestStatus:
-            self._next_weather_update = datetime.now()
-            self._update_from_rachio()
+            # 2026-09-01 (Ham + Claude): status-request scope is user-selectable
+            # (PluginConfig "statusRequestScope"). "controller" = refresh ONLY the
+            # requested controller's current schedule/active zone (one API call),
+            # skipping the account/person call, other controllers, and weather —
+            # so a flow monitor polling status every 30s during a run doesn't do a
+            # full-account refresh (+ forced weather) each time. "all" (default) is
+            # the original behavior. A global request (dev is None) always does full.
+            if self.pluginPrefs.get("statusRequestScope", "all") == "controller" and dev is not None:
+                self._refresh_device_schedule(dev)
+            else:
+                # 2026-09-01 (Ham + Claude): E — do NOT force a weather refresh on an
+                # "all"-mode status request. This previously reset _next_weather_update
+                # to now, so every RequestStatus pulled a fresh 14-day forecast per
+                # controller. Weather now rides its own DEFAULT_WEATHER_UPDATE_INTERVAL
+                # timer (post-A) inside _update_forecast_data; status requests refresh
+                # device/schedule state only.
+                self._update_from_rachio()
 
     ########################################
     # Custom Plugin Action callbacks defined in Actions.xml
