@@ -68,6 +68,22 @@
                 <TriggerLabel>Active Schedule Start Date (epoch seconds)</TriggerLabel>
                 <ControlPageLabel>Active Schedule Start Date (epoch seconds)</ControlPageLabel>
             </State>
+            <!-- 2026-09-23 (Ham + Claude): Rachio EveryDrop flow-meter support. The
+                 zone webhooks already carry a per-zone flowVolume (gallons); 0 without
+                 the accessory. flowVolumeTotal is a monotonic lifetime cumulative so a
+                 Rachio+EveryDrop can serve as a Class-B irrigation meter source (like
+                 Flume/Phyn). Only the documented flowVolume field is used; dedicated
+                 leak/flow event types are UNTESTED (no hardware to validate against). -->
+            <State id="lastZoneFlowVolume">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Last Zone Flow Volume (gal, EveryDrop)</TriggerLabel>
+                <ControlPageLabel>Last Zone Flow Volume (gal, EveryDrop)</ControlPageLabel>
+            </State>
+            <State id="flowVolumeTotal">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Cumulative Flow Volume (gal, EveryDrop)</TriggerLabel>
+                <ControlPageLabel>Cumulative Flow Volume (gal, EveryDrop)</ControlPageLabel>
+            </State>
             <State id="latitude">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Latitude</TriggerLabel>

@@ -25,6 +25,7 @@ DEFAULT_API_CALL_TIMEOUT = 5  # number of seconds after which we time out any ne
 MINIMUM_POLLING_INTERVAL = 3  # number of minutes between each poll, default is 3 (changed 2/27/2018 to help avoid throttling)
 DEFAULT_WEATHER_UPDATE_INTERVAL = 10  # number of minutes between each forecast update, default is 10
 DEFAULT_PERSON_UPDATE_INTERVAL = 15  # 2026-09-01 (Ham + Claude): minutes between full account/person refreshes (D — throttle person-data off the 3-min poll)
+ZONE_START_TOLERANCE_MS = 3000  # 2026-09-23 (Ham + Claude): slack for the zone-start freshness guard — the webhook's ms-precise zoneRunStatus.startTime vs the poll's second-rounded zoneStartDate differ ~723ms; 3s << any real zone duration, so a current-zone re-assert poll is accepted while a stale (previous-zone, tens-of-sec-older) poll is still rejected
 THROTTLE_LIMIT_TIMER = 61  # number of minutes to wait if we've received a throttle error before doing any API calls
 FORECAST_UPDATE_INTERVAL = 60  # minutes between forecast updates
 
@@ -273,7 +274,12 @@ class Plugin(indigo.PluginBase):
         if not new_start_ms:
             return True
         last_known = self._last_zone_start_ms.get(devId, 0)
-        if last_known and new_start_ms < last_known:
+        # 2026-09-23 (Ham + Claude): ZONE_START_TOLERANCE_MS slack absorbs the ~723ms
+        # sub-second mismatch between the webhook's ms-precise startTime (the mark) and
+        # the poll's second-rounded zoneStartDate, so a poll RE-ASSERTING the current
+        # zone is accepted (the 30s poll is the self-healing authority again). A stale
+        # slow poll reflects the PREVIOUS zone (tens of sec older) -> still rejected.
+        if last_known and new_start_ms < last_known - ZONE_START_TOLERANCE_MS:
             return False
         self._last_zone_start_ms[devId] = new_start_ms
         return True
@@ -670,7 +676,9 @@ class Plugin(indigo.PluginBase):
     def webHook_handler(self, payload):
         self.logger.debug(f"webHook_handler: {payload}")
 
-        self.logger.info(
+        # 2026-09-23 (Ham + Claude): demoted INFO->DEBUG — redundant with the readable
+        # "<dev>: Zone 'X' Started/Completed" INFO lines below; halves the run-time log noise.
+        self.logger.debug(
             f"webHook received, {payload.get('category', '')}/{payload.get('type', '')}/{payload.get('subType', '')}/{payload.get('eventType', '')}: {payload.get('summary', '')}")
 
         # Find the Indigo device for the Rachio Device
@@ -683,33 +691,64 @@ class Plugin(indigo.PluginBase):
 
         eventType = payload.get("eventType", "")
 
-        # 2026-08-17 (Ham + Claude): webhooks are real-time/push-based --
-        # every zone-run event here is, by construction, at least as fresh
-        # as anything a concurrently in-flight poll could be reporting.
-        # Bumping the same freshness marker _shouldAcceptZoneUpdate reads
-        # (using "now" as the timestamp, since these payloads don't carry
-        # their own zoneStartDate) means a poll response that started
-        # before this webhook but completes after it will correctly be
-        # recognized as stale and rejected, even if that poll's own
-        # zoneStartDate looked newer than whatever the LAST POLL had
-        # recorded -- without this, the guard's baseline would only ever
-        # advance on polls, and could still be fooled by a stale poll that
-        # simply hadn't been superseded by a newer POLL yet.
-        if eventType in ('DEVICE_ZONE_RUN_STARTED_EVENT', 'DEVICE_ZONE_RUN_STOPPED_EVENT',
-                          'DEVICE_ZONE_RUN_COMPLETED_EVENT'):
-            self._last_zone_start_ms[dev.id] = time_module.time() * 1000
+        # 2026-08-17 / revised 2026-09-23 (Ham + Claude): advance the freshness
+        # marker _shouldAcceptZoneUpdate reads ONLY on a zone STARTED, and stamp it
+        # with THAT zone's real start (epoch ms) from the payload -- NOT wall-clock,
+        # and NOT on STOPPED/COMPLETED (which reference the ENDING zone). This keeps
+        # the marker on the SAME clock as the 30s poll's current_schedule zoneStartDate,
+        # so the poll can re-assert the currently-running zone (its authoritative,
+        # self-healing role) instead of being rejected every cycle, while a genuinely
+        # older/slower poll is still rejected. The earlier "now" (wall-clock) bump
+        # silently demoted the poll once webhooks went live -- a running zone's real
+        # start is always < "now", so every poll write was dropped (the 2026-09-23
+        # multi-zone tracking regression: activeZone.ui froze on the first zone).
 
         if eventType == 'DEVICE_ZONE_RUN_STARTED_EVENT':
+            try:
+                zst = (payload.get('zoneRunStatus') or {}).get('startTime')
+                if zst:
+                    self._last_zone_start_ms[dev.id] = int(
+                        datetime.fromisoformat(zst.replace('Z', '+00:00')).timestamp() * 1000)
+            except Exception:
+                pass
             dev.updateStateOnServer("activeZone", payload['zoneNumber'])
             self.logger.info(f"{dev.name}: Zone '{payload['zoneName']}' Started")
 
         elif eventType == 'DEVICE_ZONE_RUN_STOPPED_EVENT':
-            dev.updateStateOnServer("activeZone", 0)
+            # 2026-09-23 (Ham + Claude): only clear if THIS zone is still the active
+            # one. Rachio OVERLAPS transitions — the next zone's STARTED webhook fires
+            # ~10s BEFORE the prior zone's STOPPED/COMPLETED — so a late stop/complete
+            # for the previous zone must NOT wipe activeZone out from under the zone
+            # that already took over (that flap left activeZone.ui at "all zones off",
+            # so SFM2 held its last zone → mis-tally + a false MAX-ZONE runaway cutoff).
+            if int(dev.states.get("activeZone", 0) or 0) == int(payload.get('zoneNumber', 0) or 0):
+                dev.updateStateOnServer("activeZone", 0)
             self.logger.info(f"{dev.name}: Zone '{payload['zoneName']}' Stopped")
 
         elif eventType == 'DEVICE_ZONE_RUN_COMPLETED_EVENT':
-            dev.updateStateOnServer("activeZone", 0)
+            # See STOPPED above — don't zero a zone that a newer STARTED already replaced.
+            if int(dev.states.get("activeZone", 0) or 0) == int(payload.get('zoneNumber', 0) or 0):
+                dev.updateStateOnServer("activeZone", 0)
             self.logger.info(f"{dev.name}: Zone '{payload['zoneName']}' Completed")
+            # 2026-09-23 (Ham + Claude): Rachio EveryDrop flow meter — the ZONE_COMPLETED
+            # webhook already carries this zone's flowVolume (gallons); 0 for anyone
+            # without the accessory, so this is inert unless the hardware is present.
+            # Guard on >0 so non-owners never touch the states. flowVolumeTotal is a
+            # monotonic lifetime cumulative (device states persist across reloads) so
+            # WaterUse can consume it as a Class-B irrigation meter source (Flume/Phyn-
+            # style). UNTESTED against real EveryDrop data (no hardware); accumulate on
+            # COMPLETED only (a manually STOPPED zone's partial flow is intentionally
+            # not counted, to avoid any double-count).
+            try:
+                fv = float(payload.get('flowVolume', 0) or 0)
+                if fv > 0:
+                    dev.updateStateOnServer("lastZoneFlowVolume", round(fv, 3))
+                    total = float(dev.states.get("flowVolumeTotal", 0) or 0) + fv
+                    dev.updateStateOnServer("flowVolumeTotal", round(total, 3))
+                    self.logger.info(f"{dev.name}: EveryDrop flow {fv:.2f} gal "
+                                     f"(cumulative {total:.1f} gal)")
+            except Exception as exc:
+                self.logger.debug(f"{dev.name}: flowVolume capture skipped: {exc}")
 
         elif eventType == 'SCHEDULE_STARTED_EVENT':
             dev.updateStateOnServer("activeSchedule", payload['scheduleName'])
