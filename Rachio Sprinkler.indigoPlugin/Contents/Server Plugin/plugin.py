@@ -631,19 +631,13 @@ class Plugin(indigo.PluginBase):
 
         self.logger.info("Rachio Sprinklers Started")
 
-        self.use_webhooks = bool(self.pluginPrefs.get("useWebhooks", False))
-        if not self.use_webhooks:
-            return
-
-        # Test here to see if Reflector webhook is available, get reflector name, etc.
-        reflectorURL = indigo.server.getReflectorURL()
-        reflector_api_key = self.pluginPrefs.get("reflector_api_key", None)
-        if not reflector_api_key:
+        # Webhook setup is handled by the single idempotent _ensureWebhooks() sanity check,
+        # which also runs every runConcurrentThread loop -- so a startup-order race where the
+        # Indigo Reflector has not connected yet (getReflectorURL() is None) recovers on its
+        # own with no reload, and a dead "None/message/..." URL is never registered. Warn once
+        # here about the one permanent misconfiguration it cannot fix: webhooks on, no API key.
+        if bool(self.pluginPrefs.get("useWebhooks", False)) and not self.pluginPrefs.get("reflector_api_key"):
             self.logger.warning("Unable to set up Rachio webhooks - no reflector API key")
-            self.use_webhooks = False
-
-        self.webhook_url = f"{reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}"
-        self.logger.debug(f"Using Reflector, webhook_url: {self.webhook_url}")
 
     ########################################
     def shutdown(self):
@@ -658,6 +652,7 @@ class Plugin(indigo.PluginBase):
 
             while True:
                 try:
+                    self._ensureWebhooks()   # self-heal: register webhooks once the Reflector is up (no reload)
                     self._update_from_rachio()
                 except (Exception,):
                     pass
@@ -665,6 +660,37 @@ class Plugin(indigo.PluginBase):
 
         except self.StopThread:
             self.logger.debug("Received StopThread")
+
+    ########################################
+
+    def _ensureWebhooks(self):
+        """Single sanity check for Rachio webhook registration. Idempotent; runs at
+        startup (via the first loop) and every runConcurrentThread cycle. It registers
+        a webhook URL ONLY once indigo.server.getReflectorURL() returns a real URL, so
+        (a) a dead "None/message/..." URL is never registered -- the failure mode where
+        the plugin loaded before the Reflector connected and webhooks silently went
+        nowhere -- and (b) a startup-order race self-heals on the next poll with no manual
+        reload. Inert on the healthy path: once registered, the first line returns at once,
+        adding no API calls. Subscribing all devices here (rather than in deviceStartComm)
+        keeps subscription in exactly one place, so there is no double-subscribe."""
+        if self.use_webhooks:
+            return                                              # already registered
+        if not bool(self.pluginPrefs.get("useWebhooks", False)):
+            return                                              # user has not enabled webhooks
+        if not self.pluginPrefs.get("reflector_api_key"):
+            return                                              # permanent misconfig (warned once in startup)
+        reflectorURL = indigo.server.getReflectorURL()
+        if not reflectorURL:
+            return                                              # Reflector not up yet -- retry next poll (self-heal)
+        reflector_api_key = self.pluginPrefs.get("reflector_api_key")
+        self.webhook_url = f"{reflectorURL}/message/{self.pluginId}/webhook?api_key={reflector_api_key}"
+        self.use_webhooks = True
+        self.logger.info(f"Rachio webhooks: Reflector available -- registering {reflectorURL}/message/{self.pluginId}/webhook")
+        for dev in indigo.devices.iter(filter="self"):
+            try:
+                self._setupDeviceWebhooks(dev)
+            except (Exception,):
+                self.logger.exception(f"Rachio webhooks: subscribe failed for '{dev.name}'")
 
     ########################################
 
@@ -941,8 +967,16 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.error(f"Rachio device '{dev.name}' configured with unknown ID. Reconfigure the device to make it active.")
 
-        # set up webhooks for this device
+        # set up webhooks for this device -- extracted to _setupDeviceWebhooks so the
+        # _ensureWebhooks() self-heal can (re)subscribe after a startup-race recovery.
+        # No-op at startup (self.use_webhooks is False until _ensureWebhooks activates it
+        # on the first loop), so startup subscribes each device exactly once -- no double.
+        self._setupDeviceWebhooks(dev)
 
+    ########################################
+    def _setupDeviceWebhooks(self, dev):
+        """Subscribe one device's Rachio webhooks to self.webhook_url. Extracted verbatim
+        from deviceStartComm so _ensureWebhooks() can reuse it after a reflector recovery."""
         if not self.use_webhooks:
             return
 
